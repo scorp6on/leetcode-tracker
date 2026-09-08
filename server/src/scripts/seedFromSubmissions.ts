@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "../db";
+import { applyAttemptToSchedule } from "../services/scheduling";
 
 async function main(): Promise<void> {
   // One row per solved problem, with the earliest accepted-submission date.
@@ -60,10 +61,16 @@ async function main(): Promise<void> {
 
   const result = await prisma.attempt.createMany({ data: toCreate });
 
+  // Give each newly-seeded problem an initial review schedule, graded as a
+  // solve. `toCreate` is empty on a re-run, so existing schedules aren't touched.
+  for (const row of toCreate) {
+    await applyAttemptToSchedule(row.problemId, "SOLVED", null, row.attemptedAt);
+  }
+
   console.log("Done.");
   console.log(`  ${solvedProblemIds.length} solved problems in your history`);
   console.log(`  ${alreadySeeded.size} already had a baseline attempt`);
-  console.log(`  ${result.count} baseline attempts created`);
+  console.log(`  ${result.count} baseline attempts created (with review schedules)`);
   if (unmatched > 0) {
     console.log(`  ${unmatched} accepted submissions skipped (slug not in catalog)`);
   }

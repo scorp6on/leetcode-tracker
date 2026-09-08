@@ -73,6 +73,9 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
     where.attempts = { some: {} };
   } else if (status === "unattempted") {
     where.attempts = { none: {} };
+  } else if (status === "due") {
+    // Has a review schedule whose next date has arrived.
+    where.reviewSchedule = { nextReviewDate: { lte: new Date() } };
   }
 
   const [total, rows, solvedCount, catalogTotal] = await Promise.all([
@@ -89,6 +92,8 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
         // Just the outcomes, newest first — enough to derive "solved?" and
         // "last outcome" without pulling whole attempt rows.
         attempts: { orderBy: { attemptedAt: "desc" }, select: { outcome: true } },
+        // The next review date, if this problem is on the SM-2 schedule.
+        reviewSchedule: { select: { nextReviewDate: true, intervalDays: true } },
       },
     }),
     // Overall progress — deliberately unfiltered.
@@ -117,6 +122,7 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
         attemptCount: p._count.attempts,
         solved: outcomes.includes("SOLVED"),
         lastOutcome: outcomes[0] ?? null,
+        nextReviewDate: p.reviewSchedule?.nextReviewDate ?? null,
       };
     }),
   });

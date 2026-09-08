@@ -11,6 +11,7 @@ import { Router, type Request, type Response } from "express";
 import { $Enums } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../db";
+import { applyAttemptToSchedule } from "../services/scheduling";
 
 export const attemptsRouter = Router();
 
@@ -60,6 +61,14 @@ attemptsRouter.post("/", async (req: Request, res: Response) => {
       notes: body.notes ?? null,
     },
   });
+
+  // Logging an attempt advances (or starts) the problem's review schedule.
+  await applyAttemptToSchedule(
+    attempt.problemId,
+    attempt.outcome,
+    attempt.confidence,
+    attempt.attemptedAt,
+  );
 
   res.status(201).json(attempt);
 });
