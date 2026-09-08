@@ -79,6 +79,30 @@ export interface NewAttempt {
   notes?: string | null
 }
 
+/** Body of POST /api/predictions. */
+export interface NewPrediction {
+  problemId: number
+  predictedTopicSlugs: string[]
+}
+
+/** A stored prediction, as returned by the API. */
+export interface Prediction {
+  id: number
+  problemId: number
+  predictedTopicSlugs: string[]
+  createdAt: string
+  resolvedAt: string | null
+  hit: boolean | null
+  matchedTopicSlugs: string[]
+}
+
+/** Response of GET /api/predictions/accuracy. */
+export interface PredictionAccuracy {
+  resolved: number
+  hits: number
+  rate: number | null // 0-1, or null when nothing resolved yet
+}
+
 /** A stored attempt, as returned by the API. */
 export interface Attempt {
   id: number

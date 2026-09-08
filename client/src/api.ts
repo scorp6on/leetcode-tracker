@@ -9,6 +9,9 @@
 import type {
   Attempt,
   NewAttempt,
+  NewPrediction,
+  Prediction,
+  PredictionAccuracy,
   ProblemsQuery,
   ProblemsResponse,
   TopicOption,
@@ -65,4 +68,16 @@ export function createAttempt(body: NewAttempt): Promise<Attempt> {
 
 export function fetchTopics(): Promise<{ topics: TopicOption[] }> {
   return getJson<{ topics: TopicOption[] }>('/api/topics')
+}
+
+export function fetchPredictions(problemId: number): Promise<{ predictions: Prediction[] }> {
+  return getJson<{ predictions: Prediction[] }>(`/api/predictions?problemId=${problemId}`)
+}
+
+export function createPrediction(body: NewPrediction): Promise<Prediction> {
+  return postJson<Prediction>('/api/predictions', body)
+}
+
+export function fetchPredictionAccuracy(): Promise<PredictionAccuracy> {
+  return getJson<PredictionAccuracy>('/api/predictions/accuracy')
 }

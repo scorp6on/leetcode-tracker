@@ -4,6 +4,7 @@ import type { Problem, ProblemsQuery, ProblemsResponse, TopicOption } from '../t
 import { DifficultyBadge } from './DifficultyBadge'
 import { EMPTY_FILTERS, FilterPanel, type Filters } from './FilterPanel'
 import { LogAttemptModal } from './LogAttemptModal'
+import { PredictModal } from './PredictModal'
 
 const PAGE_SIZE = 50
 
@@ -22,6 +23,7 @@ export function ProblemsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [logTarget, setLogTarget] = useState<Problem | null>(null)
+  const [predictTarget, setPredictTarget] = useState<Problem | null>(null)
 
   // Topics list — fetched once.
   useEffect(() => {
@@ -146,25 +148,32 @@ export function ProblemsPage() {
         <ul className={loading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
           {data?.problems.map((p) => (
             <li key={p.id} className="border-b border-line last:border-0">
-              <button
-                type="button"
-                onClick={() => setLogTarget(p)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-surface-2"
-              >
+              <div className="group flex items-center gap-4 px-4 py-3 hover:bg-surface-2">
                 <span className="w-6 shrink-0 text-center text-sm text-easy">
                   {p.solved ? '✓' : ''}
                 </span>
-                <span className="flex-1 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setLogTarget(p)}
+                  className="flex-1 text-left text-sm"
+                >
                   <span className="text-dim">{p.lcFrontendId}.</span> {p.title}
                   {p.isPremium && <span className="ml-2 text-xs text-medium">Premium</span>}
-                </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPredictTarget(p)}
+                  className="shrink-0 rounded border border-line px-2 py-1 text-xs text-muted opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover:text-ink"
+                >
+                  Predict
+                </button>
                 <span className="w-14 shrink-0 text-right text-sm text-dim">
                   {p.acRate != null ? `${p.acRate.toFixed(1)}%` : '—'}
                 </span>
                 <span className="w-12 shrink-0 text-right">
                   <DifficultyBadge difficulty={p.difficulty} />
                 </span>
-              </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -203,6 +212,14 @@ export function ProblemsPage() {
             setLogTarget(null)
             reloadCurrentPage()
           }}
+        />
+      )}
+
+      {predictTarget && (
+        <PredictModal
+          problem={predictTarget}
+          onClose={() => setPredictTarget(null)}
+          onSaved={() => setPredictTarget(null)}
         />
       )}
     </main>
