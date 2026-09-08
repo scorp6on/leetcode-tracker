@@ -26,12 +26,17 @@ const DIFFICULTIES: Difficulty[] = ["EASY", "MEDIUM", "HARD"];
  *   search      substring match on the title (case-insensitive)
  *   difficulty  EASY | MEDIUM | HARD
  *   topic       a topic slug, e.g. "dynamic-programming"
+ *   status      solved | attempted | unattempted
  *   sort        lcFrontendId (default) | title | difficulty
  *   page        1-based page number (default 1)
  *   pageSize    rows per page (default 50, max 100)
  *
  * Everything in req.query is a string (or undefined), so each value is parsed
  * and bounded before use.
+ *
+ * The response also carries a `summary` with your overall solved / total count
+ * across the whole catalog (it ignores the filters above), for the "X / Y
+ * solved" counter.
  */
 problemsRouter.get("/", async (req: Request, res: Response) => {
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
@@ -40,6 +45,8 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
   const difficultyRaw =
     typeof req.query.difficulty === "string" ? req.query.difficulty.toUpperCase() : "";
   const difficulty = DIFFICULTIES.find((d) => d === difficultyRaw);
+
+  const status = typeof req.query.status === "string" ? req.query.status.toLowerCase() : "";
 
   const sortRaw = typeof req.query.sort === "string" ? req.query.sort : "";
   const sort: SortField = SORTABLE_FIELDS.find((f) => f === sortRaw) ?? "lcFrontendId";
@@ -60,18 +67,33 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
     // "problems that have at least one topic link whose topic has this slug"
     where.topics = { some: { topic: { slug: topic } } };
   }
+  if (status === "solved") {
+    where.attempts = { some: { outcome: "SOLVED" } };
+  } else if (status === "attempted") {
+    where.attempts = { some: {} };
+  } else if (status === "unattempted") {
+    where.attempts = { none: {} };
+  }
 
-  // Run the count and the page query together.
-  const [total, rows] = await Promise.all([
+  const [total, rows, solvedCount, catalogTotal] = await Promise.all([
     prisma.problem.count({ where }),
     prisma.problem.findMany({
       where,
       orderBy: { [sort]: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      // Pull the linked topics in the same query.
-      include: { topics: { include: { topic: true } } },
+      include: {
+        topics: { include: { topic: true } },
+        // Total attempts per problem, computed by the database.
+        _count: { select: { attempts: true } },
+        // Just the outcomes, newest first — enough to derive "solved?" and
+        // "last outcome" without pulling whole attempt rows.
+        attempts: { orderBy: { attemptedAt: "desc" }, select: { outcome: true } },
+      },
     }),
+    // Overall progress — deliberately unfiltered.
+    prisma.problem.count({ where: { attempts: { some: { outcome: "SOLVED" } } } }),
+    prisma.problem.count(),
   ]);
 
   res.json({
@@ -79,16 +101,23 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
     pageSize,
     total,
     totalPages: Math.ceil(total / pageSize),
+    summary: { solved: solvedCount, total: catalogTotal },
     // Reshape Prisma's nested rows into a flat, frontend-friendly object.
-    problems: rows.map((p) => ({
-      id: p.id,
-      lcFrontendId: p.lcFrontendId,
-      slug: p.slug,
-      title: p.title,
-      difficulty: p.difficulty,
-      url: p.url,
-      isPremium: p.isPremium,
-      topics: p.topics.map((link) => ({ slug: link.topic.slug, name: link.topic.name })),
-    })),
+    problems: rows.map((p) => {
+      const outcomes = p.attempts.map((a) => a.outcome);
+      return {
+        id: p.id,
+        lcFrontendId: p.lcFrontendId,
+        slug: p.slug,
+        title: p.title,
+        difficulty: p.difficulty,
+        url: p.url,
+        isPremium: p.isPremium,
+        topics: p.topics.map((link) => ({ slug: link.topic.slug, name: link.topic.name })),
+        attemptCount: p._count.attempts,
+        solved: outcomes.includes("SOLVED"),
+        lastOutcome: outcomes[0] ?? null,
+      };
+    }),
   });
 });

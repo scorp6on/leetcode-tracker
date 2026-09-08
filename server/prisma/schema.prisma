@@ -53,6 +53,12 @@ enum FailureMode {
   RAN_OUT_OF_TIME
 }
 
+/// Where an attempt row came from.
+enum AttemptSource {
+  MANUAL // you logged it here, with full detail
+  IMPORTED // derived from your LeetCode submission history (minutes/confidence unknown)
+}
+
 // ----------------------------------------------------------------------------
 // Models (tables)
 // ----------------------------------------------------------------------------
@@ -134,12 +140,16 @@ model Attempt {
 
   attemptedAt DateTime @default(now()) @map("attempted_at")
 
+  /// MANUAL attempts always have minutes + confidence (the endpoint requires
+  /// them). IMPORTED attempts leave them null.
+  source AttemptSource @default(MANUAL)
+
   outcome Outcome
-  /// Minutes spent on this attempt.
-  minutes Int
-  /// Self-rated 1-5. Range is enforced in application code (Prisma/Postgres
-  /// enums can't express numeric ranges cleanly).
-  confidence Int
+  /// Minutes spent. Null for imported attempts.
+  minutes Int?
+  /// Self-rated 1-5. Null for imported attempts. Range enforced in the endpoint
+  /// (Postgres can't express a numeric range on a plain column cleanly).
+  confidence Int?
 
   /// Only set when the attempt wasn't a clean solve. Nullable.
   failureMode FailureMode? @map("failure_mode")
