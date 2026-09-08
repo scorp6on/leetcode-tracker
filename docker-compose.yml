@@ -1,0 +1,38 @@
+# Runs a local PostgreSQL database in a container so you don't have to
+# install Postgres on Windows directly.
+#
+#   docker compose up -d      start the database in the background
+#   docker compose down       stop it (data is kept in the named volume below)
+#   docker compose down -v     stop it AND delete all data
+#
+# Compose v2 no longer needs a top-level "version:" key.
+
+services:
+  db:
+    image: postgres:16
+    container_name: leetcode-tracker-db
+    restart: unless-stopped
+    environment:
+      # These three vars tell the official Postgres image which user / password /
+      # database to create on first boot. They must match the DATABASE_URL in
+      # server/.env.
+      POSTGRES_USER: leetcode
+      POSTGRES_PASSWORD: leetcode
+      POSTGRES_DB: leetcode_tracker
+    ports:
+      # host:container — lets your Node process reach the DB at localhost:5433.
+      # We use 5433 on the host (not the usual 5432) because this machine
+      # already runs a native Postgres on 5432. Inside the container it's
+      # still the standard 5432.
+      - "5433:5432"
+    volumes:
+      # Named volume => data survives container restarts.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leetcode -d leetcode_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

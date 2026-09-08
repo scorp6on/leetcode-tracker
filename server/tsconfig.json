@@ -1,0 +1,41 @@
+{
+  // TypeScript compiler settings. `tsx` (dev) and `tsc` (build) both read this.
+  "compilerOptions": {
+    // ---- Language / output target ------------------------------------------
+    // Compile down to JS features Node 20 supports natively.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    // Use Node's classic `require()` module system. This is the simplest choice:
+    // it means you write `import x from "./x"` with NO file extension, the way
+    // most tutorials show. (The modern "NodeNext" mode forces `./x.js` in every
+    // relative import, which is a common early stumbling block.)
+    "module": "commonjs",
+    "moduleResolution": "node",
+
+    // ---- Where files go ---------------------------------------------------
+    "rootDir": "src",
+    "outDir": "dist",
+    "sourceMap": true, // .map files so stack traces point at your .ts source
+
+    // ---- Type-safety strictness -----------------------------------------
+    // Turns on the full set of strict checks (no implicit `any`, null checks,
+    // etc.). Learning with this ON is the right call — it teaches you the type
+    // system instead of letting mistakes through.
+    "strict": true,
+
+    // ---- Interop / ergonomics ------------------------------------------
+    // Lets `import express from "express"` work even though express ships as an
+    // old CommonJS module. Without this you'd need `import * as express`.
+    "esModuleInterop": true,
+    // Catch import-casing bugs that only blow up on Linux (CI), not Windows.
+    "forceConsistentCasingInFileNames": true,
+    // Allow `import data from "./data.json"`.
+    "resolveJsonModule": true,
+    // Skip type-checking inside node_modules — faster, and their .d.ts files
+    // are not your problem to fix.
+    "skipLibCheck": true
+  },
+  // Only compile our own source.
+  "include": ["src"]
+}
