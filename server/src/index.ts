@@ -17,6 +17,7 @@ import { prisma } from "./db";
 import { problemsRouter } from "./routes/problems";
 import { attemptsRouter } from "./routes/attempts";
 import { topicsRouter } from "./routes/topics";
+import { predictionsRouter } from "./routes/predictions";
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.get("/api/health", async (_req: Request, res: Response) => {
 app.use("/api/problems", problemsRouter);
 app.use("/api/attempts", attemptsRouter);
 app.use("/api/topics", topicsRouter);
+app.use("/api/predictions", predictionsRouter);
 
 // process.env values are always strings (or undefined), so parse the port and
 // fall back to 4000 if it's missing or not a number.

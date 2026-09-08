@@ -12,6 +12,7 @@ import { $Enums } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../db";
 import { applyAttemptToSchedule } from "../services/scheduling";
+import { resolveOpenPrediction } from "../services/predictionResolution";
 
 export const attemptsRouter = Router();
 
@@ -57,13 +58,15 @@ attemptsRouter.post("/", async (req: Request, res: Response) => {
     },
   });
 
-  // Logging an attempt advances (or starts) the problem's review schedule.
+  // Logging an attempt advances (or starts) the problem's review schedule,
+  // and settles any open pattern prediction for the problem.
   await applyAttemptToSchedule(
     attempt.problemId,
     attempt.outcome,
     attempt.confidence,
     attempt.attemptedAt,
   );
+  await resolveOpenPrediction(attempt.problemId, attempt.attemptedAt);
 
   res.status(201).json(attempt);
 });

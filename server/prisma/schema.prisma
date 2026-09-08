@@ -93,6 +93,8 @@ model Problem {
   attempts       Attempt[]
   /// Raw submissions imported from your LeetCode account.
   submissions    Submission[]
+  /// Your before-attempt pattern guesses for this problem.
+  predictions    Prediction[]
   /// Zero or one schedule row — created the first time you log an attempt.
   reviewSchedule ReviewSchedule?
 
@@ -186,6 +188,33 @@ model ReviewSchedule {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("review_schedule")
+}
+
+/// A before-attempt guess at which technique(s) a problem needs. Compared
+/// against the problem's real LeetCode topic tags once you log an attempt, so
+/// pattern recognition can be scored separately from execution.
+model Prediction {
+  id Int @id @default(autoincrement())
+
+  problemId Int     @map("problem_id")
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  /// Topic slugs you guessed, e.g. ["two-pointers", "binary-search"].
+  predictedTopicSlugs String[] @map("predicted_topic_slugs")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Set when an attempt resolves this prediction. While null, this is the
+  /// single "open" prediction for the problem.
+  resolvedAt        DateTime? @map("resolved_at")
+  /// Did any guessed slug appear in the problem's real tags? Null until resolved.
+  hit              Boolean?
+  /// The guessed slugs that turned out to be real tags. Empty until resolved.
+  matchedTopicSlugs String[] @map("matched_topic_slugs")
+
+  // Fast lookup of "the open prediction for problem X".
+  @@index([problemId, resolvedAt])
+  @@map("predictions")
 }
 
 /// A faithful cache of one submission from your LeetCode account, pulled by the

@@ -12,7 +12,7 @@
     "sync:catalog": "tsx src/leetcode/syncCatalog.ts",
     "sync:submissions": "tsx src/leetcode/syncSubmissions.ts",
     "seed:from-submissions": "tsx src/scripts/seedFromSubmissions.ts",
-    "test": "node --import tsx --test src/services/sm2.test.ts",
+    "test": "node --import tsx --test src/services/sm2.test.ts src/services/predictions.test.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"
