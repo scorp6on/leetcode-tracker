@@ -68,6 +68,26 @@ attemptsRouter.post("/", async (req: Request, res: Response) => {
   );
   await resolveOpenPrediction(attempt.problemId, attempt.attemptedAt);
 
+  // Lazily grow this problem's failure-mode tags — the recommendation engine
+  // reads them. Only manual attempts carry a failure mode.
+  if (attempt.failureMode) {
+    await prisma.problemFailureMode.upsert({
+      where: {
+        problemId_failureMode: {
+          problemId: attempt.problemId,
+          failureMode: attempt.failureMode,
+        },
+      },
+      create: {
+        problemId: attempt.problemId,
+        failureMode: attempt.failureMode,
+        count: 1,
+        lastSeenAt: attempt.attemptedAt,
+      },
+      update: { count: { increment: 1 }, lastSeenAt: attempt.attemptedAt },
+    });
+  }
+
   res.status(201).json(attempt);
 });
 

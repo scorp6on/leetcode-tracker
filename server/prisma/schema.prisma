@@ -95,6 +95,8 @@ model Problem {
   submissions    Submission[]
   /// Your before-attempt pattern guesses for this problem.
   predictions    Prediction[]
+  /// Failure modes you have actually hit on this problem (built lazily).
+  failureModes   ProblemFailureMode[]
   /// Zero or one schedule row — created the first time you log an attempt.
   reviewSchedule ReviewSchedule?
 
@@ -215,6 +217,26 @@ model Prediction {
   // Fast lookup of "the open prediction for problem X".
   @@index([problemId, resolvedAt])
   @@map("predictions")
+}
+
+/// A failure mode you have actually hit on a problem, with how often and how
+/// recently. Built lazily: a row appears the first time you log an attempt with
+/// that failure mode on that problem, never pre-populated. The recommendation
+/// engine reads this to weight problems toward your recent weak spots.
+model ProblemFailureMode {
+  problemId   Int         @map("problem_id")
+  failureMode FailureMode @map("failure_mode")
+
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  /// How many attempts on this problem hit this failure mode.
+  count      Int      @default(0)
+  /// When it was last hit.
+  lastSeenAt DateTime @map("last_seen_at")
+
+  @@id([problemId, failureMode])
+  @@index([failureMode])
+  @@map("problem_failure_modes")
 }
 
 /// A faithful cache of one submission from your LeetCode account, pulled by the
