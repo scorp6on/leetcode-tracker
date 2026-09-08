@@ -82,6 +82,8 @@ model Problem {
   /// The problem's LeetCode topic tags, via the join table.
   topics         ProblemTopic[]
   attempts       Attempt[]
+  /// Raw submissions imported from your LeetCode account.
+  submissions    Submission[]
   /// Zero or one schedule row — created the first time you log an attempt.
   reviewSchedule ReviewSchedule?
 
@@ -171,4 +173,42 @@ model ReviewSchedule {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("review_schedule")
+}
+
+/// A faithful cache of one submission from your LeetCode account, pulled by the
+/// `sync:submissions` script. This is raw imported data — your reflective
+/// `Attempt` rows are created separately and are never overwritten by a re-sync.
+model Submission {
+  /// LeetCode's own submission id. Stored as text because we only ever match on
+  /// it, never do arithmetic, and it sidesteps big-integer handling.
+  lcSubmissionId String @id @map("lc_submission_id")
+
+  /// Link to our catalog. Nullable because, in rare cases, a submission may be
+  /// for a problem not present in our `problems` table (e.g. removed by
+  /// LeetCode). `titleSlug` is kept regardless so it can be re-linked later.
+  problemId Int?     @map("problem_id")
+  problem   Problem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
+  titleSlug String   @map("title_slug")
+
+  lang          String
+  /// LeetCode's human-readable status, e.g. "Accepted", "Wrong Answer",
+  /// "Time Limit Exceeded".
+  statusDisplay String  @map("status_display")
+  /// Convenience flag derived from statusDisplay == "Accepted", so "have I
+  /// solved this?" queries don't have to string-match.
+  isAccepted    Boolean @map("is_accepted")
+  runtime       String?
+  memory        String?
+  /// Full source code of the submission.
+  code          String
+
+  /// When the submission was made on LeetCode (from their unix timestamp).
+  submittedAt DateTime @map("submitted_at")
+  /// When our sync first stored this row.
+  importedAt  DateTime @default(now()) @map("imported_at")
+
+  @@index([problemId])
+  @@index([titleSlug])
+  @@index([submittedAt])
+  @@map("submissions")
 }

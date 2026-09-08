@@ -9,7 +9,11 @@
  * Node 20 has `fetch` built in, so there's no HTTP library to install.
  */
 
-const LEETCODE_GRAPHQL_URL = "https://leetcode.com/graphql";
+const LEETCODE_ORIGIN = "https://leetcode.com";
+const LEETCODE_GRAPHQL_URL = `${LEETCODE_ORIGIN}/graphql`;
+
+/** Raised when LeetCode rejects our credentials — usually an expired session. */
+export class LeetCodeAuthError extends Error {}
 
 export interface GraphQLRequest {
   query: string;
@@ -54,4 +58,36 @@ export async function leetcodeGraphQL<T>(body: GraphQLRequest): Promise<T> {
   }
 
   return json.data;
+}
+
+/**
+ * GET a LeetCode REST endpoint (path like "/api/submissions/?offset=0&limit=20")
+ * with the given headers, and parse the JSON body as `T`.
+ *
+ * `headers` is where the caller passes the authenticated Cookie / x-csrftoken
+ * set from auth.ts. This helper stays credential-agnostic.
+ *
+ * Throws `LeetCodeAuthError` on 401/403 (bad or expired session) and a plain
+ * Error on other failures, including 429 (rate limited).
+ */
+export async function leetcodeRestGet<T>(
+  path: string,
+  headers: Record<string, string>,
+): Promise<T> {
+  const res = await fetch(`${LEETCODE_ORIGIN}${path}`, { headers });
+
+  if (res.status === 401 || res.status === 403) {
+    throw new LeetCodeAuthError(
+      `LeetCode rejected the request (HTTP ${res.status}). Your LEETCODE_SESSION / ` +
+        "LEETCODE_CSRF cookies are probably expired — re-copy them from your browser.",
+    );
+  }
+  if (res.status === 429) {
+    throw new Error("LeetCode rate limited the request (HTTP 429). Wait a bit and retry.");
+  }
+  if (!res.ok) {
+    throw new Error(`LeetCode REST request failed: HTTP ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as T;
 }

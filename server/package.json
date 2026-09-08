@@ -10,6 +10,7 @@
     "db:up": "docker compose -f ../docker-compose.yml up -d",
     "db:down": "docker compose -f ../docker-compose.yml down",
     "sync:catalog": "tsx src/leetcode/syncCatalog.ts",
+    "sync:submissions": "tsx src/leetcode/syncSubmissions.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"
