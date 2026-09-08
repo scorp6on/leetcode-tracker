@@ -17,22 +17,17 @@ export const attemptsRouter = Router();
 
 // --- POST /api/attempts -------------------------------------------------
 
-const createAttemptSchema = z
-  .object({
-    problemId: z.number().int().positive(),
-    outcome: z.enum($Enums.Outcome),
-    // 0-600 minutes is a generous bound that still rejects nonsense.
-    minutes: z.number().int().min(0).max(600),
-    confidence: z.number().int().min(1).max(5),
-    // `.nullish()` = the key may be omitted, or explicitly null.
-    failureMode: z.enum($Enums.FailureMode).nullish(),
-    notes: z.string().trim().max(2000).nullish(),
-  })
-  // A clean solve has no failure mode. Cross-field rules go in `.refine`.
-  .refine((v) => !(v.outcome === "SOLVED" && v.failureMode), {
-    message: "failureMode is only valid when outcome is STRUGGLED or FAILED",
-    path: ["failureMode"],
-  });
+const createAttemptSchema = z.object({
+  problemId: z.number().int().positive(),
+  outcome: z.enum($Enums.Outcome),
+  // 0-600 minutes is a generous bound that still rejects nonsense.
+  minutes: z.number().int().min(0).max(600),
+  confidence: z.number().int().min(1).max(5),
+  // Optional on any outcome — you might note "almost made an off-by-one" even
+  // on a clean solve. `.nullish()` = the key may be omitted, or explicitly null.
+  failureMode: z.enum($Enums.FailureMode).nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+});
 
 attemptsRouter.post("/", async (req: Request, res: Response) => {
   const parsed = createAttemptSchema.safeParse(req.body);

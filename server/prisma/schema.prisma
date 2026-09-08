@@ -76,6 +76,9 @@ model Problem {
   title        String
 
   difficulty Difficulty
+  /// Acceptance rate as a percentage (e.g. 38.6), from LeetCode. Null until the
+  /// catalog sync has populated it.
+  acRate     Float?     @map("ac_rate")
   /// Full problem URL, stored so the frontend can link straight out to it.
   url        String
   /// LeetCode locks some problems behind a paid account; we store those thin.

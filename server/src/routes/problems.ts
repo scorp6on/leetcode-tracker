@@ -116,6 +116,7 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
         slug: p.slug,
         title: p.title,
         difficulty: p.difficulty,
+        acRate: p.acRate,
         url: p.url,
         isPremium: p.isPremium,
         topics: p.topics.map((link) => ({ slug: link.topic.slug, name: link.topic.name })),

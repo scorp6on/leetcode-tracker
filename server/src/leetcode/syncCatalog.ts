@@ -41,6 +41,7 @@ const LIST_QUERY = `
         title
         titleSlug
         difficulty
+        acRate
         isPaidOnly
         topicTags {
           name
@@ -57,6 +58,7 @@ interface LcQuestion {
   title: string;
   titleSlug: string;
   difficulty: "Easy" | "Medium" | "Hard";
+  acRate: number; // acceptance rate as a percentage, e.g. 38.63
   isPaidOnly: boolean;
   topicTags: { name: string; slug: string }[];
 }
@@ -120,6 +122,7 @@ async function upsertQuestion(q: LcQuestion): Promise<void> {
       slug: q.titleSlug,
       title: q.title,
       difficulty,
+      acRate: q.acRate,
       url: `https://leetcode.com/problems/${q.titleSlug}/`,
       isPremium: q.isPaidOnly,
     },
@@ -127,6 +130,7 @@ async function upsertQuestion(q: LcQuestion): Promise<void> {
       lcFrontendId: Number(q.frontendId),
       title: q.title,
       difficulty,
+      acRate: q.acRate,
       isPremium: q.isPaidOnly,
       syncedAt: new Date(),
     },
