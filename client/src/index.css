@@ -1,0 +1,37 @@
+/* Tailwind v4: one import pulls in the framework. */
+@import 'tailwindcss';
+
+/* Design tokens — LeetCode's dark theme. Referenced as utilities, e.g.
+   bg-surface, text-muted, border-line, text-medium, font-display. */
+@theme {
+  --color-bg: #1a1a1a;
+  --color-surface: #282828;
+  --color-surface-2: #333333;
+  --color-line: #3e3e3e;
+
+  --color-ink: #f0f2f5;
+  --color-muted: #8b9096;
+  --color-dim: #6b7076;
+
+  --color-easy: #2cbcb0;
+  --color-medium: #ffb013;
+  --color-hard: #f6383f;
+
+  --color-accent: #3b82f6;
+  --color-accent-soft: #1e3a5f;
+
+  --font-display: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+}
+
+body {
+  @apply bg-bg text-ink antialiased;
+}
+
+/* Give the range sliders a dark, LeetCode-ish look (native styling is too
+   bright on a dark background). */
+input[type='range'] {
+  @apply h-1 w-full cursor-pointer appearance-none rounded-full bg-surface-2;
+}
+input[type='range']::-webkit-slider-thumb {
+  @apply h-4 w-4 appearance-none rounded-full bg-ink;
+}
