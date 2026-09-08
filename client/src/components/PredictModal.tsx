@@ -30,7 +30,8 @@ const PATTERNS: { slug: string; label: string }[] = [
 ]
 
 interface Props {
-  problem: Problem
+  // Only needs an id + title, so both the problem list and the queue can open it.
+  problem: Pick<Problem, 'id' | 'title'>
   onClose: () => void
   onSaved: () => void
 }

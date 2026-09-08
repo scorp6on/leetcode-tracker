@@ -103,6 +103,33 @@ export interface PredictionAccuracy {
   rate: number | null // 0-1, or null when nothing resolved yet
 }
 
+/** One card in the "Today's queue" screen. */
+export interface Recommendation {
+  score: number
+  components: { dueness: number; failureRelevance: number; transfer: number }
+  reason: string[] // fragments, joined for display
+  problem: {
+    id: number
+    lcFrontendId: number
+    slug: string
+    title: string
+    difficulty: Difficulty
+    url: string
+    topics: Topic[]
+  }
+}
+
+/** Response of GET /api/recommendations. */
+export interface RecommendationsResponse {
+  recommendations: Recommendation[]
+  meta: {
+    dayStreak: number
+    problemsSolved: number
+    topFailureMode: FailureMode | null
+    patternAccuracy: number | null // 0-1
+  }
+}
+
 /** A stored attempt, as returned by the API. */
 export interface Attempt {
   id: number

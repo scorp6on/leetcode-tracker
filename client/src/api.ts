@@ -14,6 +14,7 @@ import type {
   PredictionAccuracy,
   ProblemsQuery,
   ProblemsResponse,
+  RecommendationsResponse,
   TopicOption,
 } from './types'
 
@@ -80,4 +81,8 @@ export function createPrediction(body: NewPrediction): Promise<Prediction> {
 
 export function fetchPredictionAccuracy(): Promise<PredictionAccuracy> {
   return getJson<PredictionAccuracy>('/api/predictions/accuracy')
+}
+
+export function fetchRecommendations(): Promise<RecommendationsResponse> {
+  return getJson<RecommendationsResponse>('/api/recommendations')
 }
