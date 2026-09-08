@@ -79,11 +79,46 @@ model Problem {
   syncedAt DateTime @default(now()) @map("synced_at")
 
   // --- Relations -------------------------------------------------------
+  /// The problem's LeetCode topic tags, via the join table.
+  topics         ProblemTopic[]
   attempts       Attempt[]
   /// Zero or one schedule row — created the first time you log an attempt.
   reviewSchedule ReviewSchedule?
 
   @@map("problems")
+}
+
+/// A LeetCode "topic tag" — the algorithm / data-structure categories LeetCode
+/// assigns to problems (e.g. "Dynamic Programming", "Two Pointers"). Rows are
+/// created by the catalog sync, same as problems.
+model Topic {
+  id   Int    @id @default(autoincrement())
+  /// URL-safe identifier from LeetCode, e.g. "two-pointers". Stable, unique.
+  slug String @unique
+  /// Human-readable label, e.g. "Two Pointers".
+  name String
+
+  problems ProblemTopic[]
+
+  @@map("topics")
+}
+
+/// Join table for the many-to-many between Problem and Topic. We model it
+/// explicitly (rather than letting Prisma hide it) so later features can query
+/// "which problems share this topic" directly. The primary key is the pair of
+/// foreign keys, so a problem can't be linked to the same topic twice.
+model ProblemTopic {
+  problemId Int @map("problem_id")
+  topicId   Int @map("topic_id")
+
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  topic   Topic   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, topicId])
+  // Index the second column too — the pair index alone doesn't help queries
+  // that start from a topic.
+  @@index([topicId])
+  @@map("problem_topics")
 }
 
 /// One logged practice attempt at a problem. This is the raw event data every

@@ -12,7 +12,11 @@
 import { PrismaClient } from "@prisma/client";
 
 export const prisma = new PrismaClient({
-  // Log the SQL Prisma runs, plus warnings and errors, to the console.
-  // Helpful while learning; you can trim this to ["warn", "error"] later.
-  log: ["query", "warn", "error"],
+  // Always log warnings and errors. Also log every SQL statement when
+  // PRISMA_LOG_QUERIES=true in .env — useful when you want to see exactly what
+  // a query does, but far too noisy for bulk work like the catalog sync.
+  log:
+    process.env.PRISMA_LOG_QUERIES === "true"
+      ? ["query", "warn", "error"]
+      : ["warn", "error"],
 });

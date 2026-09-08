@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "db:up": "docker compose -f ../docker-compose.yml up -d",
     "db:down": "docker compose -f ../docker-compose.yml down",
+    "sync:catalog": "tsx src/leetcode/syncCatalog.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"

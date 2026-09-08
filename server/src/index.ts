@@ -14,6 +14,7 @@ import "dotenv/config";
 
 import express, { type Request, type Response } from "express";
 import { prisma } from "./db";
+import { problemsRouter } from "./routes/problems";
 
 const app = express();
 
@@ -39,6 +40,10 @@ app.get("/api/health", async (_req: Request, res: Response) => {
     res.status(503).json({ status: "error", db: "down" });
   }
 });
+
+// Mount the catalog routes. Everything the router defines is prefixed with this
+// path, so the router's "/" becomes "/api/problems".
+app.use("/api/problems", problemsRouter);
 
 // process.env values are always strings (or undefined), so parse the port and
 // fall back to 4000 if it's missing or not a number.
