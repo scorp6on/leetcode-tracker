@@ -19,6 +19,7 @@ import { attemptsRouter } from "./routes/attempts";
 import { topicsRouter } from "./routes/topics";
 import { predictionsRouter } from "./routes/predictions";
 import { recommendationsRouter } from "./routes/recommendations";
+import { dashboardRouter } from "./routes/dashboard";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use("/api/attempts", attemptsRouter);
 app.use("/api/topics", topicsRouter);
 app.use("/api/predictions", predictionsRouter);
 app.use("/api/recommendations", recommendationsRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 // process.env values are always strings (or undefined), so parse the port and
 // fall back to 4000 if it's missing or not a number.
