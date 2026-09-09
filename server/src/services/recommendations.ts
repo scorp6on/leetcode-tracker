@@ -181,3 +181,46 @@ export function recommend(input: RecInput): Recommendation[] {
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit);
 }
+
+// ---------------------------------------------------------------------------
+// First-sign-in mode
+// ---------------------------------------------------------------------------
+// Right after a history import there is no practice data here, and every
+// imported solve looks "massively overdue", so `recommend()` would just surface
+// your oldest solves. Until you log your first attempt, the queue instead leads
+// with your MOST RECENT solves — the stuff you were actually working on.
+
+export interface RecentCandidate {
+  problemId: number;
+  /** Date of your most recent accepted submission for this problem. */
+  lastSolvedAt: Date;
+}
+
+/** Human "3 days ago" / "2 months ago" from a past date. */
+function relativeAge(from: Date, now: Date): string {
+  const days = Math.max(0, Math.floor((now.getTime() - from.getTime()) / MS_PER_DAY));
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+  const years = Math.round(days / 365);
+  return `${years} year${years === 1 ? "" : "s"} ago`;
+}
+
+/** Most-recently-solved first. Used only until the first manual attempt. */
+export function recommendRecent(
+  candidates: RecentCandidate[],
+  now: Date,
+  limit = 8,
+): Recommendation[] {
+  return [...candidates]
+    .sort((a, b) => b.lastSolvedAt.getTime() - a.lastSolvedAt.getTime())
+    .slice(0, limit)
+    .map((c) => ({
+      problemId: c.problemId,
+      score: 0,
+      components: { dueness: 0, failureRelevance: 0, transfer: 0 },
+      reason: ["Solved " + relativeAge(c.lastSolvedAt, now), "warm it back up"],
+    }));
+}

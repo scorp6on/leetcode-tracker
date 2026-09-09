@@ -26,7 +26,8 @@ const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 interface Props {
-  problem: Problem
+  // Needs only id + title + topics, so the queue's lighter problem object works.
+  problem: Pick<Problem, 'id' | 'title' | 'topics'>
   onClose: () => void
   onSaved: () => void
 }

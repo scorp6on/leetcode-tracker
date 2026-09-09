@@ -41,6 +41,17 @@ export interface Problem {
   nextReviewDate: string | null // ISO date string
 }
 
+/** Response of GET /api/problems/:slug/description. */
+export interface ProblemDescription {
+  slug: string
+  title: string
+  difficulty: Difficulty
+  url: string
+  isPremium: boolean
+  /** Problem statement as HTML. Null for premium problems. */
+  html: string | null
+}
+
 /** One entry from GET /api/topics. */
 export interface TopicOption {
   slug: string
@@ -122,6 +133,8 @@ export interface Recommendation {
 /** Response of GET /api/recommendations. */
 export interface RecommendationsResponse {
   recommendations: Recommendation[]
+  /** "recency" = first-sign-in mode (most recent solves); "engine" = normal ranking. */
+  mode: 'recency' | 'engine'
   meta: {
     dayStreak: number
     problemsSolved: number

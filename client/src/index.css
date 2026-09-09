@@ -35,3 +35,59 @@ input[type='range'] {
 input[type='range']::-webkit-slider-thumb {
   @apply h-4 w-4 appearance-none rounded-full bg-ink;
 }
+
+/* Styling for the raw problem-statement HTML from LeetCode, rendered via
+   dangerouslySetInnerHTML inside a .lc-content container. */
+.lc-content {
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+.lc-content p {
+  margin: 0 0 0.9rem;
+}
+.lc-content code {
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+  background: var(--color-surface-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.lc-content pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 1rem;
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.lc-content pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+.lc-content strong.example {
+  display: inline-block;
+  margin: 0.3rem 0 0.5rem;
+  color: var(--color-ink);
+}
+.lc-content ul,
+.lc-content ol {
+  margin: 0 0 0.9rem;
+  padding-left: 1.3rem;
+}
+.lc-content li {
+  margin: 0.25rem 0;
+}
+.lc-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 0.3rem 0 1rem;
+}
+.lc-content a {
+  color: var(--color-accent);
+}

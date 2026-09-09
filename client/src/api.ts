@@ -14,6 +14,7 @@ import type {
   Prediction,
   PredictionAccuracy,
   LeetCodeSyncResult,
+  ProblemDescription,
   ProblemsQuery,
   ProblemsResponse,
   RecommendationsResponse,
@@ -102,6 +103,10 @@ export function syncLeetCode(): Promise<LeetCodeSyncResult> {
 
 export function fetchAttempts(problemId: number): Promise<{ attempts: Attempt[] }> {
   return getJson<{ attempts: Attempt[] }>(`/api/attempts?problemId=${problemId}`)
+}
+
+export function fetchProblemDescription(slug: string): Promise<ProblemDescription> {
+  return getJson<ProblemDescription>(`/api/problems/${encodeURIComponent(slug)}/description`)
 }
 
 export function createAttempt(body: NewAttempt): Promise<Attempt> {

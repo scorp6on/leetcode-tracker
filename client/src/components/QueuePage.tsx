@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fetchRecommendations } from '../api'
 import type { FailureMode, Recommendation, RecommendationsResponse } from '../types'
 import { PredictModal } from './PredictModal'
+import { ProblemDetailModal } from './ProblemDetailModal'
 import { Stat } from './Stat'
 
 const FAILURE_MODE_LABEL: Record<FailureMode, string> = {
@@ -20,12 +21,15 @@ export function QueuePage() {
   const [data, setData] = useState<RecommendationsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [predictFor, setPredictFor] = useState<Recommendation['problem'] | null>(null)
+  const [detailFor, setDetailFor] = useState<Recommendation['problem'] | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchRecommendations()
       .then(setData)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
+
+  useEffect(load, [load])
 
   const recs = data?.recommendations ?? []
   const meta = data?.meta
@@ -49,6 +53,13 @@ export function QueuePage() {
 
       {error && <p className="mt-6 text-sm text-hard">Error: {error}</p>}
 
+      {data?.mode === 'recency' && recs.length > 0 && (
+        <p className="mt-4 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted">
+          Starting from your most recent LeetCode solves. Once you log your first attempt here,
+          this switches to spaced-repetition scheduling.
+        </p>
+      )}
+
       {data && recs.length === 0 && (
         <p className="mt-8 text-sm text-muted">
           Nothing queued yet. Log a few attempts (especially ones that didn&rsquo;t go cleanly)
@@ -62,16 +73,21 @@ export function QueuePage() {
             key={r.problem.id}
             className="flex flex-col rounded-xl border border-line bg-surface p-5"
           >
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-base font-semibold">{r.problem.title}</h2>
-              {r.problem.topics[0] && (
-                <span className="shrink-0 rounded-full bg-accent-soft/40 px-2.5 py-0.5 text-xs text-accent">
-                  {r.problem.topics[0].name}
-                </span>
-              )}
-            </div>
-
-            <p className="mt-2 flex-1 text-sm text-muted">{r.reason.join(' · ')}</p>
+            <button
+              type="button"
+              onClick={() => setDetailFor(r.problem)}
+              className="-m-1 flex flex-1 flex-col items-stretch rounded-lg p-1 text-left hover:bg-surface-2"
+            >
+              <span className="flex items-start justify-between gap-3">
+                <span className="text-base font-semibold">{r.problem.title}</span>
+                {r.problem.topics[0] && (
+                  <span className="shrink-0 rounded-full bg-accent-soft/40 px-2.5 py-0.5 text-xs text-accent">
+                    {r.problem.topics[0].name}
+                  </span>
+                )}
+              </span>
+              <span className="mt-2 flex-1 text-sm text-muted">{r.reason.join(' · ')}</span>
+            </button>
 
             <div className="mt-4 flex gap-2">
               <button
@@ -113,6 +129,17 @@ export function QueuePage() {
           problem={predictFor}
           onClose={() => setPredictFor(null)}
           onSaved={() => setPredictFor(null)}
+        />
+      )}
+
+      {detailFor && (
+        <ProblemDetailModal
+          problem={detailFor}
+          onClose={() => setDetailFor(null)}
+          onLogged={() => {
+            setDetailFor(null)
+            load()
+          }}
         />
       )}
     </main>

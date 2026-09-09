@@ -9,6 +9,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Difficulty, Prisma } from "@prisma/client";
 import { prisma } from "../db";
+import { leetcodeGraphQL } from "../leetcode/client";
 
 export const problemsRouter = Router();
 
@@ -127,4 +128,59 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
       };
     }),
   });
+});
+
+/**
+ * GET /api/problems/:slug/description
+ *
+ * The full problem statement as HTML. Lazily cached: on a miss we fetch it from
+ * LeetCode's public `question` query, store it on the row, and return it.
+ * Premium problems have no public statement — `html` comes back null.
+ */
+interface QuestionContent {
+  question: { content: string | null; isPaidOnly: boolean } | null;
+}
+
+problemsRouter.get("/:slug/description", async (req: Request, res: Response) => {
+  const slug = String(req.params.slug);
+
+  const problem = await prisma.problem.findUnique({ where: { slug } });
+  if (!problem) {
+    return res.status(404).json({ error: `No problem with slug "${slug}"` });
+  }
+
+  const base = {
+    slug,
+    title: problem.title,
+    difficulty: problem.difficulty,
+    url: problem.url,
+  };
+
+  if (problem.descriptionHtml) {
+    return res.json({ ...base, isPremium: problem.isPremium, html: problem.descriptionHtml });
+  }
+
+  let data: QuestionContent;
+  try {
+    data = await leetcodeGraphQL<QuestionContent>({
+      query: "query ($s: String!) { question(titleSlug: $s) { content isPaidOnly } }",
+      variables: { s: slug },
+    });
+  } catch {
+    return res
+      .status(502)
+      .json({ error: "Couldn't fetch the problem statement from LeetCode." });
+  }
+
+  const html = data.question?.content ?? null;
+  const isPremium = problem.isPremium || Boolean(data.question?.isPaidOnly);
+
+  if (html) {
+    await prisma.problem.update({
+      where: { slug },
+      data: { descriptionHtml: html, descriptionSyncedAt: new Date() },
+    });
+  }
+
+  res.json({ ...base, isPremium, html });
 });

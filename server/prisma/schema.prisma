@@ -87,6 +87,11 @@ model Problem {
   /// When the catalog sync last refreshed this row.
   syncedAt DateTime @default(now()) @map("synced_at")
 
+  /// The problem statement as HTML, fetched from LeetCode the first time it's
+  /// viewed. Null until then; null forever for premium problems.
+  descriptionHtml     String?   @map("description_html")
+  descriptionSyncedAt DateTime? @map("description_synced_at")
+
   // --- Relations -------------------------------------------------------
   /// The problem's LeetCode topic tags, via the join table.
   topics         ProblemTopic[]

@@ -9,7 +9,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { $Enums } from "@prisma/client";
 import { prisma } from "../db";
-import { recommend, type RecCandidate } from "../services/recommendations";
+import { recommend, recommendRecent, type RecCandidate } from "../services/recommendations";
 
 type FailureMode = $Enums.FailureMode;
 
@@ -26,6 +26,63 @@ recommendationsRouter.get("/", async (req: Request, res: Response) => {
   }
   const { limit } = parsed.data;
   const now = new Date();
+
+  // --- First sign-in: nothing has been practised here yet. Every imported
+  //     solve looks massively overdue, so lead with the MOST RECENT solves
+  //     instead. This mode ends the moment the first manual attempt is logged.
+  const manualCount = await prisma.attempt.count({ where: { source: "MANUAL" } });
+  if (manualCount === 0) {
+    const recentGroups = await prisma.submission.groupBy({
+      by: ["problemId"],
+      where: { isAccepted: true, problemId: { not: null } },
+      _max: { submittedAt: true },
+    });
+
+    if (recentGroups.length > 0) {
+      const recentCandidates = recentGroups
+        .filter((g): g is typeof g & { problemId: number } => g.problemId !== null)
+        .map((g) => ({ problemId: g.problemId, lastSolvedAt: g._max.submittedAt ?? now }));
+
+      const ranked = recommendRecent(recentCandidates, now, limit);
+      const problems = await prisma.problem.findMany({
+        where: { id: { in: ranked.map((r) => r.problemId) } },
+        select: {
+          id: true,
+          lcFrontendId: true,
+          slug: true,
+          title: true,
+          difficulty: true,
+          url: true,
+          topics: { select: { topic: { select: { slug: true, name: true } } } },
+        },
+      });
+      const byId = new Map(problems.map((p) => [p.id, p]));
+
+      const recommendations = ranked
+        .map((r) => {
+          const p = byId.get(r.problemId);
+          return p
+            ? {
+                score: r.score,
+                components: r.components,
+                reason: r.reason,
+                problem: {
+                  id: p.id,
+                  lcFrontendId: p.lcFrontendId,
+                  slug: p.slug,
+                  title: p.title,
+                  difficulty: p.difficulty,
+                  url: p.url,
+                  topics: p.topics.map((t) => ({ slug: t.topic.slug, name: t.topic.name })),
+                },
+              }
+            : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+
+      return res.json({ recommendations, meta: await buildMeta(now), mode: "recency" });
+    }
+  }
 
   // --- Candidates: scheduled problems that are due now, or that you've hit a
   //     failure mode on. ------------------------------------------------------
@@ -110,7 +167,7 @@ recommendationsRouter.get("/", async (req: Request, res: Response) => {
     };
   });
 
-  res.json({ recommendations, meta: await buildMeta(now) });
+  res.json({ recommendations, meta: await buildMeta(now), mode: "engine" });
 });
 
 /** The stat tiles under the queue: streak, solved count, top failure mode,
