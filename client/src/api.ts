@@ -9,6 +9,8 @@
 import type {
   Attempt,
   DashboardResponse,
+  HistoryQuery,
+  HistoryResponse,
   NewAttempt,
   NewPrediction,
   Prediction,
@@ -107,6 +109,10 @@ export function fetchAttempts(problemId: number): Promise<{ attempts: Attempt[] 
 
 export function fetchProblemDescription(slug: string): Promise<ProblemDescription> {
   return getJson<ProblemDescription>(`/api/problems/${encodeURIComponent(slug)}/description`)
+}
+
+export function fetchHistory(query: HistoryQuery): Promise<HistoryResponse> {
+  return getJson<HistoryResponse>(`/api/attempts${toQueryString({ ...query })}`)
 }
 
 export function createAttempt(body: NewAttempt): Promise<Attempt> {

@@ -1,26 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createAttempt, fetchAttempts, fetchPredictions } from '../api'
 import type { Attempt, FailureMode, Outcome, Prediction, Problem } from '../types'
-
-const OUTCOMES: Outcome[] = ['SOLVED', 'STRUGGLED', 'FAILED']
-const OUTCOME_LABEL: Record<Outcome, string> = {
-  SOLVED: 'Solved',
-  STRUGGLED: 'Struggled',
-  FAILED: 'Failed',
-}
-
-const FAILURE_MODES: { value: FailureMode; label: string }[] = [
-  { value: 'OFF_BY_ONE', label: 'Off-by-one' },
-  { value: 'MISSED_EDGE_CASE', label: 'Missed edge case' },
-  { value: 'WRONG_COMPLEXITY', label: 'Wrong complexity assumption' },
-  { value: 'MISREAD_CONSTRAINTS', label: 'Misread constraints' },
-  { value: 'WRONG_APPROACH', label: 'Wrong approach' },
-  { value: 'SYNTAX_ERROR', label: 'Syntax error' },
-  { value: 'RAN_OUT_OF_TIME', label: 'Ran out of time' },
-]
-const FM_LABEL: Record<string, string> = Object.fromEntries(
-  FAILURE_MODES.map((f) => [f.value, f.label]),
-)
+import { FAILURE_MODE_LABEL, FAILURE_MODES, OUTCOME_LABEL, OUTCOMES } from '../labels'
 
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -123,7 +104,7 @@ export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
                 {pastAttempts.slice(0, 4).map((a) => (
                   <li key={a.id}>
                     {shortDate(a.attemptedAt)} &middot; {OUTCOME_LABEL[a.outcome]}
-                    {a.failureMode ? ` · ${FM_LABEL[a.failureMode]}` : ''}
+                    {a.failureMode ? ` · ${FAILURE_MODE_LABEL[a.failureMode]}` : ''}
                     {a.source === 'IMPORTED' ? ' (imported)' : ''}
                   </li>
                 ))}

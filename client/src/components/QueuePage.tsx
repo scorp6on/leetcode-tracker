@@ -1,19 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchRecommendations } from '../api'
-import type { FailureMode, Recommendation, RecommendationsResponse } from '../types'
+import type { Recommendation, RecommendationsResponse } from '../types'
+import { FAILURE_MODE_LABEL } from '../labels'
 import { PredictModal } from './PredictModal'
 import { ProblemDetailModal } from './ProblemDetailModal'
 import { Stat } from './Stat'
-
-const FAILURE_MODE_LABEL: Record<FailureMode, string> = {
-  OFF_BY_ONE: 'Off-by-one',
-  MISSED_EDGE_CASE: 'Missed edge case',
-  WRONG_COMPLEXITY: 'Wrong complexity',
-  MISREAD_CONSTRAINTS: 'Misread constraints',
-  WRONG_APPROACH: 'Wrong approach',
-  SYNTAX_ERROR: 'Syntax error',
-  RAN_OUT_OF_TIME: 'Ran out of time',
-}
 
 const today = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 

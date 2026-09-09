@@ -189,3 +189,30 @@ export interface Attempt {
   failureMode: FailureMode | null
   notes: string | null
 }
+
+/** An attempt with its problem attached — the History screen's row shape. */
+export interface HistoryAttempt extends Attempt {
+  problem: {
+    lcFrontendId: number
+    title: string
+    slug: string
+    difficulty: Difficulty
+    url: string
+    topics: Topic[]
+  }
+}
+
+export interface HistoryQuery {
+  outcome?: Outcome
+  source?: 'MANUAL' | 'IMPORTED'
+  page?: number
+  pageSize?: number
+}
+
+export interface HistoryResponse {
+  attempts: HistoryAttempt[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}

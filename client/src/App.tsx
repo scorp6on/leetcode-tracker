@@ -6,6 +6,7 @@ import type { SettingsResponse } from './types'
 import { ConnectionChip } from './components/ConnectionChip'
 import { ConnectWizard } from './components/ConnectWizard'
 import { DashboardPage } from './components/DashboardPage'
+import { HistoryPage } from './components/HistoryPage'
 import { ProblemsPage } from './components/ProblemsPage'
 import { QueuePage } from './components/QueuePage'
 
@@ -51,6 +52,7 @@ function App() {
           <TabLink to="/">Problems</TabLink>
           <TabLink to="/queue">Today&rsquo;s queue</TabLink>
           <TabLink to="/patterns">Your patterns</TabLink>
+          <TabLink to="/history">History</TabLink>
           <div className="ml-auto">
             <ConnectionChip
               settings={settings}
@@ -67,6 +69,7 @@ function App() {
         <Route path="/" element={<ProblemsPage />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/patterns" element={<DashboardPage />} />
+        <Route path="/history" element={<HistoryPage />} />
       </Routes>
     </BrowserRouter>
   )
