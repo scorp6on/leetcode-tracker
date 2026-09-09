@@ -61,18 +61,35 @@ async function loadProblemIdBySlug(): Promise<Map<string, number>> {
   return new Map(rows.map((row) => [row.slug, row.id]));
 }
 
+export interface SyncOptions {
+  onProgress?: (progress: { imported: number; accepted: number }) => void;
+  /**
+   * Stop as soon as a whole page contains only submissions we already have.
+   * The endpoint is newest-first, so new submissions are always at the front —
+   * this makes a routine sync fetch roughly one page.
+   */
+  incremental?: boolean;
+}
+
 /**
  * Page through the submissions REST endpoint, upserting each row.
- *
- * @param auth        resolved LeetCode credentials
- * @param onProgress  optional callback after each page, for a live UI
  */
 export async function runSubmissionSync(
   auth: LeetCodeAuth,
-  onProgress?: (progress: { imported: number; accepted: number }) => void,
+  options: SyncOptions = {},
 ): Promise<SubmissionSyncResult> {
+  const { onProgress, incremental = false } = options;
   const headers = buildAuthHeaders(auth);
   const problemIdBySlug = await loadProblemIdBySlug();
+
+  // For an incremental run, the ids we already hold — so we can stop early.
+  const knownIds = incremental
+    ? new Set(
+        (await prisma.submission.findMany({ select: { lcSubmissionId: true } })).map(
+          (r) => r.lcSubmissionId,
+        ),
+      )
+    : new Set<string>();
 
   let offset = 0;
   let pages = 0;
@@ -89,6 +106,9 @@ export async function runSubmissionSync(
 
     const batch = page.submissions_dump ?? [];
     if (batch.length === 0) break;
+
+    // Incremental: if every row here is already stored, we've caught up.
+    if (incremental && batch.every((s) => knownIds.has(String(s.id)))) break;
 
     for (const s of batch) {
       const problemId = problemIdBySlug.get(s.title_slug) ?? null;
@@ -143,9 +163,9 @@ async function main(): Promise<void> {
   const auth = await resolveLeetCodeAuth();
   console.log(`Fetching submissions for "${auth.username || "connected account"}"...`);
 
-  const result = await runSubmissionSync(auth, ({ imported }) =>
-    console.log(`  ...${imported} submissions`),
-  );
+  const result = await runSubmissionSync(auth, {
+    onProgress: ({ imported }) => console.log(`  ...${imported} submissions`),
+  });
 
   console.log(`\nDone.`);
   console.log(`  ${result.imported} submissions stored`);

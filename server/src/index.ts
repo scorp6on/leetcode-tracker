@@ -21,6 +21,7 @@ import { predictionsRouter } from "./routes/predictions";
 import { recommendationsRouter } from "./routes/recommendations";
 import { dashboardRouter } from "./routes/dashboard";
 import { settingsRouter } from "./routes/settings";
+import { startAutoSync, stopAutoSync } from "./leetcode/autoSync";
 
 const app = express();
 
@@ -63,6 +64,7 @@ const port = Number(process.env.PORT) || 4000;
 
 const server = app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
+  startAutoSync();
 });
 
 /**
@@ -72,6 +74,7 @@ const server = app.listen(port, () => {
  */
 async function shutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, shutting down...`);
+  stopAutoSync();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);
