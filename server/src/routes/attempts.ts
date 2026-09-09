@@ -92,11 +92,18 @@ attemptsRouter.post("/", async (req: Request, res: Response) => {
 });
 
 // --- GET /api/attempts ------------------------------------------------
+//
+// Callers: the log / detail modals pass `problemId` for a problem's recent few;
+// the History screen pages through everything with filters. The response always
+// carries `total` / `totalPages` for a pager.
 
 const listAttemptsSchema = z.object({
   // query-string values arrive as strings; `z.coerce` converts before checking.
   problemId: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  outcome: z.enum($Enums.Outcome).optional(),
+  source: z.enum($Enums.AttemptSource).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 attemptsRouter.get("/", async (req: Request, res: Response) => {
@@ -104,14 +111,51 @@ attemptsRouter.get("/", async (req: Request, res: Response) => {
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid query", details: z.treeifyError(parsed.error) });
   }
-  const { problemId, limit } = parsed.data;
+  const { problemId, outcome, source, page, pageSize } = parsed.data;
 
-  const attempts = await prisma.attempt.findMany({
-    where: problemId ? { problemId } : undefined,
-    orderBy: { attemptedAt: "desc" },
-    take: limit,
-    include: { problem: { select: { title: true, slug: true } } },
+  const where = {
+    ...(problemId ? { problemId } : {}),
+    ...(outcome ? { outcome } : {}),
+    ...(source ? { source } : {}),
+  };
+
+  const [total, attempts] = await Promise.all([
+    prisma.attempt.count({ where }),
+    prisma.attempt.findMany({
+      where,
+      orderBy: { attemptedAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        problem: {
+          select: {
+            lcFrontendId: true,
+            title: true,
+            slug: true,
+            difficulty: true,
+            url: true,
+            topics: { select: { topic: { select: { slug: true, name: true } } } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  res.json({
+    attempts: attempts.map((a) => ({
+      ...a,
+      problem: {
+        lcFrontendId: a.problem.lcFrontendId,
+        title: a.problem.title,
+        slug: a.problem.slug,
+        difficulty: a.problem.difficulty,
+        url: a.problem.url,
+        topics: a.problem.topics.map((t) => ({ slug: t.topic.slug, name: t.topic.name })),
+      },
+    })),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.ceil(total / pageSize),
   });
-
-  res.json({ attempts });
 });
