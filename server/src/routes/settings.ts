@@ -11,6 +11,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { leetcodeGraphQL, LeetCodeAuthError } from "../leetcode/client";
 import { buildAuthHeaders, resolveLeetCodeAuth } from "../leetcode/auth";
+import { encrypt } from "../leetcode/secretBox";
 import { runSubmissionSync } from "../leetcode/syncSubmissions";
 import { seedBaselineAttempts } from "../scripts/seedFromSubmissions";
 
@@ -98,18 +99,22 @@ settingsRouter.put("/leetcode", async (req: Request, res: Response) => {
 
   const avatarUrl = await fetchAvatar(username);
 
+  // Encrypted at rest when APP_SECRET_KEY is set; plaintext otherwise.
+  const storedSession = encrypt(session);
+  const storedCsrf = encrypt(csrf);
+
   await prisma.settings.upsert({
     where: { id: 1 },
     create: {
       id: 1,
-      leetcodeSession: session,
-      leetcodeCsrf: csrf,
+      leetcodeSession: storedSession,
+      leetcodeCsrf: storedCsrf,
       leetcodeUsername: username,
       leetcodeAvatarUrl: avatarUrl,
     },
     update: {
-      leetcodeSession: session,
-      leetcodeCsrf: csrf,
+      leetcodeSession: storedSession,
+      leetcodeCsrf: storedCsrf,
       leetcodeUsername: username,
       leetcodeAvatarUrl: avatarUrl,
     },

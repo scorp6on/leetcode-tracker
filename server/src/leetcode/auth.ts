@@ -15,6 +15,7 @@
 
 import { prisma } from "../db";
 import { LeetCodeAuthError } from "./client";
+import { decrypt } from "./secretBox";
 
 export interface LeetCodeAuth {
   session: string;
@@ -30,8 +31,14 @@ export interface LeetCodeAuth {
 export async function resolveLeetCodeAuth(): Promise<LeetCodeAuth> {
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
 
-  const session = settings?.leetcodeSession ?? process.env.LEETCODE_SESSION?.trim();
-  const csrfToken = settings?.leetcodeCsrf ?? process.env.LEETCODE_CSRF?.trim();
+  // Row values may be encrypted (APP_SECRET_KEY); decrypt() passes plaintext
+  // and .env values through untouched.
+  const session = settings?.leetcodeSession
+    ? decrypt(settings.leetcodeSession)
+    : process.env.LEETCODE_SESSION?.trim();
+  const csrfToken = settings?.leetcodeCsrf
+    ? decrypt(settings.leetcodeCsrf)
+    : process.env.LEETCODE_CSRF?.trim();
   const username =
     settings?.leetcodeUsername ?? process.env.LEETCODE_USERNAME?.trim() ?? "";
 

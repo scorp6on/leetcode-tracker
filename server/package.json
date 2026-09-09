@@ -14,6 +14,7 @@
     "seed:from-submissions": "tsx src/scripts/seedFromSubmissions.ts",
     "test": "node --import tsx --test src/services/sm2.test.ts src/services/predictions.test.ts src/services/recommendations.test.ts src/services/dashboard.test.ts",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"
   },

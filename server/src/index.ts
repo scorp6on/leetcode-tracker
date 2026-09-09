@@ -12,8 +12,11 @@
 // process.env. It must come before anything that reads process.env.
 import "dotenv/config";
 
+import fs from "node:fs";
+import path from "node:path";
 import express, { type Request, type Response } from "express";
 import { prisma } from "./db";
+import { basicAuth } from "./middleware/basicAuth";
 import { problemsRouter } from "./routes/problems";
 import { attemptsRouter } from "./routes/attempts";
 import { topicsRouter } from "./routes/topics";
@@ -24,6 +27,10 @@ import { settingsRouter } from "./routes/settings";
 import { startAutoSync, stopAutoSync } from "./leetcode/autoSync";
 
 const app = express();
+
+// Gate the entire app (API + static client) behind HTTP Basic Auth. No-op
+// unless APP_PASSWORD is set, so local development is unaffected. Must be first.
+app.use(basicAuth());
 
 // Middleware: parse incoming JSON request bodies into `req.body`. We don't need
 // it for the health check, but every real endpoint later will.
@@ -57,6 +64,25 @@ app.use("/api/predictions", predictionsRouter);
 app.use("/api/recommendations", recommendationsRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/settings", settingsRouter);
+
+// In a deployed build the server also serves the compiled client, so it's all
+// one origin (no CORS, no separate host). `../../client/dist` resolves the same
+// from `server/dist/index.js` and from `server/src/index.ts` under tsx. Skipped
+// entirely in local dev, where Vite serves the client.
+const clientDist = path.join(__dirname, "../../client/dist");
+const clientIndex = path.join(clientDist, "index.html");
+if (fs.existsSync(clientIndex)) {
+  app.use(express.static(clientDist));
+  // SPA fallback: any non-/api GET returns index.html so React Router's
+  // /queue, /patterns, /history deep-links survive a refresh.
+  app.use((req: Request, res: Response, next) => {
+    if (req.method === "GET" && !req.path.startsWith("/api/")) {
+      return res.sendFile(clientIndex);
+    }
+    next();
+  });
+  console.log(`Serving client from ${clientDist}`);
+}
 
 // process.env values are always strings (or undefined), so parse the port and
 // fall back to 4000 if it's missing or not a number.

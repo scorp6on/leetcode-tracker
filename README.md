@@ -116,11 +116,83 @@ cookies.
    `LEETCODE_CSRF` in `server/.env` for the CLI path).
 
 The session is verified against LeetCode before it's stored, and lives in the
-`settings` table. It expires every few weeks — reconnect when a sync starts
-failing. Stored in plaintext, same trust level as `.env`; fine for a local tool,
-**don't deploy this publicly as-is.**
+`settings` table (plaintext by default; encrypted at rest when `APP_SECRET_KEY`
+is set — see **Deploying**). It expires every few weeks — reconnect when a sync
+starts failing.
 
 Once connected, an incremental sync runs every `SYNC_INTERVAL_MINUTES` (default 5).
+
+---
+
+## Deploying (use it across devices)
+
+All app data lives in the one database, so "use it on my laptop and my desktop"
+just means putting the database and the server somewhere both can reach. The
+supported shape: **a managed Postgres + one hosted web service that serves the
+API *and* the built client** (one origin, no CORS), behind HTTP Basic Auth.
+
+```
+  laptop / desktop / phone  ──▶  https://<your-app>.<host>  ──▶  managed Postgres
+                                 Express: /api + client/dist
+                                 Basic Auth · auto-sync
+```
+
+### 1. Managed Postgres
+
+Create a database on [Neon](https://neon.tech) (or Supabase / Railway). Copy its
+connection string — the **pooled** one if offered.
+
+### 2. Host the web service
+
+Any Node platform works (Render, Railway, Fly.io). A free tier that sleeps on
+inactivity is fine — auto-sync just pauses while it's asleep and catches up on
+the next request. Point it at this repo and set:
+
+| Setting | Value |
+|---|---|
+| Build command | `npm run build` |
+| Pre-deploy / release command | `npm run migrate:deploy` |
+| Start command | `npm start` |
+| Node version | 20 (`.node-version` is committed) |
+
+Environment variables:
+
+| Var | Value |
+|---|---|
+| `DATABASE_URL` | the Neon connection string |
+| `APP_USERNAME` / `APP_PASSWORD` | your login (Basic Auth covers the API *and* the client) |
+| `APP_SECRET_KEY` | `openssl rand -base64 32` — encrypts the stored LeetCode cookies at rest |
+| `NODE_ENV` | `production` |
+
+`PORT` is provided by the platform. Leave `SYNC_INTERVAL_MINUTES` unset (default 5).
+
+### 3. First data load
+
+Once the tables exist (`migrate:deploy` ran), populate the catalog once from your
+own machine, pointed at the cloud DB:
+
+```bash
+cd server
+DATABASE_URL="<neon url>" npm run sync:catalog
+```
+
+### 4. Use it
+
+Open `https://<your-app>.<host>`, log in, and **Connect LeetCode**. Every device
+opens the same URL with the same login and sees the same data — an attempt logged
+on one shows up on the next immediately (it's one database, queried live, not a
+per-device copy). If you also run locally against the same cloud DB, set
+`SYNC_INTERVAL_MINUTES=0` in your local `server/.env` so only the hosted instance
+auto-syncs.
+
+**Security:** Basic Auth + the platform's HTTPS + `APP_SECRET_KEY` encryption are
+the mitigations for putting your LeetCode session on a hosted DB. It's still your
+session on a third party — acceptable for a personal single-user deployment, not
+something to share access to.
+
+> Local development is unchanged and needs none of the `APP_*` vars — Basic Auth
+> and static client-serving are inert unless `APP_PASSWORD` / a built `client/dist`
+> are present.
 
 ---
 
@@ -142,23 +214,27 @@ Once connected, an incremental sync runs every `SYNC_INTERVAL_MINUTES` (default 
 
 | Variable | Default | |
 |---|---|---|
-| `DATABASE_URL` | `…@localhost:5433/leetcode_tracker` | Postgres connection string |
+| `DATABASE_URL` | `…@localhost:5433/leetcode_tracker` | Postgres connection string (local or managed) |
 | `PORT` | `4000` | API port |
 | `SYNC_INTERVAL_MINUTES` | `5` | auto-sync cadence; `0` disables |
 | `PRISMA_LOG_QUERIES` | unset | `true` logs every SQL statement |
 | `LEETCODE_SESSION` / `LEETCODE_CSRF` / `LEETCODE_USERNAME` | unset | CLI-only fallback for the account connection |
+| `APP_USERNAME` / `APP_PASSWORD` | unset | hosted only — turns on HTTP Basic Auth for the whole app |
+| `APP_SECRET_KEY` | unset | hosted only — 32-byte base64 key; encrypts stored LeetCode cookies at rest |
 
 ---
 
 ## Project layout
 
 ```
-docker-compose.yml            Postgres
+docker-compose.yml            Postgres (local dev)
+package.json                  deploy orchestration: build both, run the server
 server/
   prisma/schema.prisma        data model + migrations
   src/
-    index.ts                  Express app, router mounts, auto-sync boot
+    index.ts                  Express app, router mounts, static client, auto-sync boot
     db.ts                     the shared PrismaClient
+    middleware/basicAuth.ts   whole-app Basic Auth (off unless APP_PASSWORD set)
     routes/                   problems, attempts, predictions, recommendations,
                               dashboard, topics, settings
     services/
@@ -170,6 +246,7 @@ server/
     leetcode/
       client.ts               fetch wrappers for LeetCode's GraphQL / REST
       auth.ts                  resolves credentials (DB row, then .env)
+      secretBox.ts             optional at-rest encryption for stored cookies
       syncCatalog.ts           catalog import
       syncSubmissions.ts       submission import (full + incremental)
       autoSync.ts              the interval job

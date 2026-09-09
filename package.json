@@ -1,0 +1,13 @@
+{
+  "name": "leetcode-tracker",
+  "private": true,
+  "description": "Deploy orchestration — builds server + client and runs the server, which serves both.",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "scripts": {
+    "build": "cd server && npm ci --include=dev && npm run build && npm run prisma:generate && cd ../client && npm ci --include=dev && npm run build",
+    "migrate:deploy": "cd server && npm run prisma:deploy",
+    "start": "node server/dist/index.js"
+  }
+}
