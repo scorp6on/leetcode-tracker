@@ -276,3 +276,24 @@ model Submission {
   @@index([submittedAt])
   @@map("submissions")
 }
+
+/// App configuration — a single row (id is always 1). Holds the LeetCode account
+/// connection entered through the onboarding screen.
+///
+/// `leetcodeSession` / `leetcodeCsrf` are stored in plaintext, the same trust
+/// level as the server's .env file. Fine for a local single-user tool; do not
+/// deploy this publicly without encrypting them.
+model Settings {
+  id Int @id @default(1)
+
+  leetcodeUsername String? @map("leetcode_username")
+  leetcodeSession  String? @map("leetcode_session")
+  leetcodeCsrf     String? @map("leetcode_csrf")
+
+  /// When the submission import last completed.
+  submissionsSyncedAt DateTime? @map("submissions_synced_at")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

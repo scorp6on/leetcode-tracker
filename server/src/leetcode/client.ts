@@ -30,7 +30,10 @@ export interface GraphQLRequest {
  *
  * Throws on: network failure, non-2xx HTTP status, or a GraphQL `errors` array.
  */
-export async function leetcodeGraphQL<T>(body: GraphQLRequest): Promise<T> {
+export async function leetcodeGraphQL<T>(
+  body: GraphQLRequest,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   const res = await fetch(LEETCODE_GRAPHQL_URL, {
     method: "POST",
     headers: {
@@ -39,6 +42,8 @@ export async function leetcodeGraphQL<T>(body: GraphQLRequest): Promise<T> {
       // User-Agent and Referer are enough to be treated as a normal caller.
       "User-Agent": "leetcode-tracker/0.1 (personal practice tracker)",
       Referer: "https://leetcode.com",
+      // Auth headers (Cookie / x-csrftoken) when a signed-in call is needed.
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });

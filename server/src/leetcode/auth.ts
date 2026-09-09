@@ -2,50 +2,47 @@
  * Credentials for talking to LeetCode as *you*.
  *
  * LeetCode has no official API keys or OAuth. The only way to read your own
- * submissions is to reuse a logged-in browser session:
+ * submissions is to reuse a logged-in browser session (two cookies). Those come
+ * from one of two places, checked in this order:
  *
- *   1. Log in to leetcode.com in your browser.
- *   2. Open dev tools -> Application (or Storage) -> Cookies -> https://leetcode.com
- *   3. Copy the values of `LEETCODE_SESSION` and `csrftoken`.
- *   4. Paste them into server/.env as LEETCODE_SESSION and LEETCODE_CSRF.
+ *   1. The `settings` row, written by the in-app "Connect LeetCode" screen.
+ *   2. `LEETCODE_SESSION` / `LEETCODE_CSRF` in server/.env (the CLI-only path).
  *
- * These are real credentials — anyone with `LEETCODE_SESSION` can act as you on
- * LeetCode. `.env` is gitignored; keep it that way. The session expires every
- * few weeks; when a sync starts returning 401/403, re-copy the cookies.
+ * Either way they're real credentials — anyone with `LEETCODE_SESSION` can act
+ * as you on LeetCode. The session expires every few weeks; when a sync starts
+ * returning 401/403, reconnect (or re-copy the cookies into .env).
  */
 
+import { prisma } from "../db";
 import { LeetCodeAuthError } from "./client";
 
 export interface LeetCodeAuth {
   session: string;
   csrfToken: string;
+  /** Display only. May be "" when it isn't known (e.g. the .env path). */
   username: string;
 }
 
 /**
- * Read the three required values from the environment, or throw a message that
- * says exactly what to do. Call this once at the start of an authenticated
- * script.
+ * Resolve stored credentials: the connected account first, then .env. Throws a
+ * `LeetCodeAuthError` with a clear message when neither is set.
  */
-export function loadLeetCodeAuth(): LeetCodeAuth {
-  const session = process.env.LEETCODE_SESSION?.trim();
-  const csrfToken = process.env.LEETCODE_CSRF?.trim();
-  const username = process.env.LEETCODE_USERNAME?.trim();
+export async function resolveLeetCodeAuth(): Promise<LeetCodeAuth> {
+  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
 
-  const missing = [
-    !session && "LEETCODE_SESSION",
-    !csrfToken && "LEETCODE_CSRF",
-    !username && "LEETCODE_USERNAME",
-  ].filter(Boolean);
+  const session = settings?.leetcodeSession ?? process.env.LEETCODE_SESSION?.trim();
+  const csrfToken = settings?.leetcodeCsrf ?? process.env.LEETCODE_CSRF?.trim();
+  const username =
+    settings?.leetcodeUsername ?? process.env.LEETCODE_USERNAME?.trim() ?? "";
 
-  if (missing.length > 0) {
+  if (!session || !csrfToken) {
     throw new LeetCodeAuthError(
-      `Missing ${missing.join(", ")} in server/.env.\n` +
-        "See server/.env.example for how to get these from your browser cookies.",
+      "LeetCode is not connected. Connect it from the app, or set " +
+        "LEETCODE_SESSION and LEETCODE_CSRF in server/.env.",
     );
   }
 
-  return { session: session!, csrfToken: csrfToken!, username: username! };
+  return { session, csrfToken, username };
 }
 
 /**

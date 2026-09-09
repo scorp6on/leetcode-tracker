@@ -2,22 +2,18 @@
  * Submission sync: import your LeetCode submission history into the `submissions`
  * table.
  *
- * Run with:  npm run sync:submissions
- * Requires:  LEETCODE_SESSION, LEETCODE_CSRF, LEETCODE_USERNAME in server/.env
- *            (see server/.env.example)
+ * Two entry points:
+ *   - `npm run sync:submissions` runs the CLI wrapper at the bottom of this file.
+ *   - The "Connect LeetCode" screen calls `runSubmissionSync()` from an endpoint.
  *
  * Idempotent — each submission is UPSERTed by its LeetCode id, so re-running
  * refreshes the catalog link and adds anything new. Your reflective `Attempt`
  * rows live in a different table and are untouched.
- *
- * This is raw import. Turning it into "these are the problems I've solved" (and
- * seeding the review schedule) happens in the attempts milestone, which reads
- * this table.
  */
 
 import { prisma } from "../db";
 import { leetcodeRestGet, LeetCodeAuthError } from "./client";
-import { buildAuthHeaders, loadLeetCodeAuth } from "./auth";
+import { buildAuthHeaders, resolveLeetCodeAuth, type LeetCodeAuth } from "./auth";
 
 // --- Tuning knobs --------------------------------------------------------
 const PAGE_LIMIT = 20; // LeetCode caps this endpoint at 20 per request
@@ -44,6 +40,17 @@ interface SubmissionsPage {
   last_key: string | null;
 }
 
+export interface SubmissionSyncResult {
+  /** Total submissions stored (created or refreshed). */
+  imported: number;
+  /** How many of those were "Accepted". */
+  accepted: number;
+  /** Distinct problems with at least one accepted submission. */
+  distinctSolved: number;
+  /** Slugs seen in submissions but missing from the catalog. */
+  unmatched: string[];
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -54,13 +61,18 @@ async function loadProblemIdBySlug(): Promise<Map<string, number>> {
   return new Map(rows.map((row) => [row.slug, row.id]));
 }
 
-async function main(): Promise<void> {
-  const auth = loadLeetCodeAuth();
+/**
+ * Page through the submissions REST endpoint, upserting each row.
+ *
+ * @param auth        resolved LeetCode credentials
+ * @param onProgress  optional callback after each page, for a live UI
+ */
+export async function runSubmissionSync(
+  auth: LeetCodeAuth,
+  onProgress?: (progress: { imported: number; accepted: number }) => void,
+): Promise<SubmissionSyncResult> {
   const headers = buildAuthHeaders(auth);
-
   const problemIdBySlug = await loadProblemIdBySlug();
-  console.log(`Catalog has ${problemIdBySlug.size} problems to match against.`);
-  console.log(`Fetching submissions for "${auth.username}"...`);
 
   let offset = 0;
   let pages = 0;
@@ -109,7 +121,7 @@ async function main(): Promise<void> {
       imported += 1;
     }
 
-    console.log(`  ...${imported} submissions (offset ${offset})`);
+    onProgress?.({ imported, accepted });
 
     pages += 1;
     if (!page.has_next) break;
@@ -117,27 +129,44 @@ async function main(): Promise<void> {
     await sleep(DELAY_MS);
   }
 
+  return {
+    imported,
+    accepted,
+    distinctSolved: solvedSlugs.size,
+    unmatched: [...unmatchedSlugs],
+  };
+}
+
+// --- CLI wrapper -------------------------------------------------------
+
+async function main(): Promise<void> {
+  const auth = await resolveLeetCodeAuth();
+  console.log(`Fetching submissions for "${auth.username || "connected account"}"...`);
+
+  const result = await runSubmissionSync(auth, ({ imported }) =>
+    console.log(`  ...${imported} submissions`),
+  );
+
   console.log(`\nDone.`);
-  console.log(`  ${imported} submissions stored`);
-  console.log(`  ${accepted} accepted, across ${solvedSlugs.size} distinct problems`);
-  if (unmatchedSlugs.size > 0) {
+  console.log(`  ${result.imported} submissions stored`);
+  console.log(`  ${result.accepted} accepted, across ${result.distinctSolved} distinct problems`);
+  if (result.unmatched.length > 0) {
     console.log(
-      `  ${unmatchedSlugs.size} submissions were for slugs not in the catalog ` +
-        `(run sync:catalog if that seems high): ${[...unmatchedSlugs].slice(0, 10).join(", ")}` +
-        (unmatchedSlugs.size > 10 ? ", ..." : ""),
+      `  ${result.unmatched.length} submissions were for slugs not in the catalog ` +
+        `(run sync:catalog if that seems high): ${result.unmatched.slice(0, 10).join(", ")}` +
+        (result.unmatched.length > 10 ? ", ..." : ""),
     );
   }
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (err) => {
-    // Auth failures get a clean one-line message; everything else prints in full.
-    if (err instanceof LeetCodeAuthError) {
-      console.error(`\n${err.message}`);
-    } else {
-      console.error(err);
-    }
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+// Only run the CLI flow when executed directly, not when imported by a route.
+if (process.argv[1] && process.argv[1].endsWith("syncSubmissions.ts")) {
+  main()
+    .then(() => prisma.$disconnect())
+    .catch(async (err) => {
+      if (err instanceof LeetCodeAuthError) console.error(`\n${err.message}`);
+      else console.error(err);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}

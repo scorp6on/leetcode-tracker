@@ -1,8 +1,9 @@
 /**
  * Seed baseline attempts from imported LeetCode submissions.
  *
- * Run with:  npm run seed:from-submissions
- * Prereq:    npm run sync:submissions has been run at least once
+ * Two entry points:
+ *   - `npm run seed:from-submissions` runs the CLI wrapper at the bottom.
+ *   - The "Connect LeetCode" screen calls `seedBaselineAttempts()` after a sync.
  *
  * For every problem you have an *accepted* submission for, this creates ONE
  * attempt row:
@@ -18,7 +19,18 @@
 import { prisma } from "../db";
 import { applyAttemptToSchedule } from "../services/scheduling";
 
-async function main(): Promise<void> {
+export interface SeedResult {
+  /** Distinct solved problems found in the submission history. */
+  solvedProblems: number;
+  /** Of those, how many already had a baseline attempt. */
+  alreadySeeded: number;
+  /** New baseline attempts (and review schedules) created this run. */
+  created: number;
+  /** Accepted submissions whose slug isn't in the catalog. */
+  unmatched: number;
+}
+
+export async function seedBaselineAttempts(): Promise<SeedResult> {
   // One row per solved problem, with the earliest accepted-submission date.
   // `problemId: { not: null }` drops submissions whose slug isn't in the catalog.
   const solved = await prisma.submission.groupBy({
@@ -36,14 +48,9 @@ async function main(): Promise<void> {
     .filter((id): id is number => id !== null);
 
   if (solvedProblemIds.length === 0) {
-    console.log("No accepted submissions linked to catalog problems. Nothing to seed.");
-    if (unmatched > 0) {
-      console.log(`(${unmatched} accepted submissions had slugs not in the catalog.)`);
-    }
-    return;
+    return { solvedProblems: 0, alreadySeeded: 0, created: 0, unmatched };
   }
 
-  // Which of those already have a baseline attempt?
   const existing = await prisma.attempt.findMany({
     where: { source: "IMPORTED", problemId: { in: solvedProblemIds } },
     select: { problemId: true },
@@ -67,19 +74,31 @@ async function main(): Promise<void> {
     await applyAttemptToSchedule(row.problemId, "SOLVED", null, row.attemptedAt);
   }
 
-  console.log("Done.");
-  console.log(`  ${solvedProblemIds.length} solved problems in your history`);
-  console.log(`  ${alreadySeeded.size} already had a baseline attempt`);
-  console.log(`  ${result.count} baseline attempts created (with review schedules)`);
-  if (unmatched > 0) {
-    console.log(`  ${unmatched} accepted submissions skipped (slug not in catalog)`);
-  }
+  return {
+    solvedProblems: solvedProblemIds.length,
+    alreadySeeded: alreadySeeded.size,
+    created: result.count,
+    unmatched,
+  };
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (err) => {
-    console.error(err);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+// --- CLI wrapper -------------------------------------------------------
+
+if (process.argv[1] && process.argv[1].endsWith("seedFromSubmissions.ts")) {
+  seedBaselineAttempts()
+    .then((r) => {
+      console.log("Done.");
+      console.log(`  ${r.solvedProblems} solved problems in your history`);
+      console.log(`  ${r.alreadySeeded} already had a baseline attempt`);
+      console.log(`  ${r.created} baseline attempts created (with review schedules)`);
+      if (r.unmatched > 0) {
+        console.log(`  ${r.unmatched} accepted submissions skipped (slug not in catalog)`);
+      }
+      return prisma.$disconnect();
+    })
+    .catch(async (err) => {
+      console.error(err);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}
