@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import { DashboardPage } from './components/DashboardPage'
 import { ProblemsPage } from './components/ProblemsPage'
 import { QueuePage } from './components/QueuePage'
 
@@ -10,11 +11,13 @@ function App() {
         <nav className="mx-auto flex max-w-4xl gap-6 px-4">
           <TabLink to="/">Problems</TabLink>
           <TabLink to="/queue">Today&rsquo;s queue</TabLink>
+          <TabLink to="/patterns">Your patterns</TabLink>
         </nav>
       </header>
       <Routes>
         <Route path="/" element={<ProblemsPage />} />
         <Route path="/queue" element={<QueuePage />} />
+        <Route path="/patterns" element={<DashboardPage />} />
       </Routes>
     </BrowserRouter>
   )

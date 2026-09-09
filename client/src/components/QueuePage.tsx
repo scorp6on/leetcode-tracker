@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchRecommendations } from '../api'
 import type { FailureMode, Recommendation, RecommendationsResponse } from '../types'
 import { PredictModal } from './PredictModal'
+import { Stat } from './Stat'
 
 const FAILURE_MODE_LABEL: Record<FailureMode, string> = {
   OFF_BY_ONE: 'Off-by-one',
@@ -115,14 +116,5 @@ export function QueuePage() {
         />
       )}
     </main>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-sm text-muted">{label}</div>
-      <div className="mt-1 font-display text-2xl font-semibold">{value}</div>
-    </div>
   )
 }

@@ -8,6 +8,7 @@
 
 import type {
   Attempt,
+  DashboardResponse,
   NewAttempt,
   NewPrediction,
   Prediction,
@@ -85,4 +86,8 @@ export function fetchPredictionAccuracy(): Promise<PredictionAccuracy> {
 
 export function fetchRecommendations(): Promise<RecommendationsResponse> {
   return getJson<RecommendationsResponse>('/api/recommendations')
+}
+
+export function fetchDashboard(): Promise<DashboardResponse> {
+  return getJson<DashboardResponse>('/api/dashboard')
 }

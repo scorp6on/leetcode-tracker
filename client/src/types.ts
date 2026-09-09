@@ -130,6 +130,24 @@ export interface RecommendationsResponse {
   }
 }
 
+/** Response of GET /api/dashboard — the "Your patterns" screen. */
+export interface DashboardResponse {
+  totals: {
+    problemsAttempted: number
+    cleanSolveRate: number | null // 0-1
+    patternIdAccuracy: number | null // 0-1
+  }
+  failureModes30d: { mode: FailureMode; count: number; pct: number }[]
+  byTopic: {
+    slug: string
+    name: string
+    idAccuracy: number | null // 0-1
+    executionRate: number | null // 0-1
+    attempts: number
+    predictionsResolved: number
+  }[]
+}
+
 /** A stored attempt, as returned by the API. */
 export interface Attempt {
   id: number
