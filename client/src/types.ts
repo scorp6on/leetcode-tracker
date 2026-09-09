@@ -39,6 +39,8 @@ export interface Problem {
   solved: boolean
   lastOutcome: Outcome | null
   nextReviewDate: string | null // ISO date string
+  /** True only when you've logged an attempt here and its review is due. */
+  reviewDue: boolean
 }
 
 /** Response of GET /api/problems/:slug/description. */

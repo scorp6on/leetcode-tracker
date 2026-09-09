@@ -159,7 +159,7 @@ export function ProblemsPage() {
                 >
                   <span className="text-dim">{p.lcFrontendId}.</span> {p.title}
                   {p.isPremium && <span className="ml-2 text-xs text-medium">Premium</span>}
-                  {p.nextReviewDate && new Date(p.nextReviewDate) <= new Date() && (
+                  {p.reviewDue && (
                     <span className="ml-2 rounded bg-medium/15 px-1.5 py-0.5 text-xs text-medium">
                       Due
                     </span>

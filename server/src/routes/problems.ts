@@ -75,8 +75,10 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
   } else if (status === "unattempted") {
     where.attempts = { none: {} };
   } else if (status === "due") {
-    // Has a review schedule whose next date has arrived.
+    // Due for review AND you've actually practised it here — an imported solve
+    // alone doesn't put a problem in the review rotation.
     where.reviewSchedule = { nextReviewDate: { lte: new Date() } };
+    where.attempts = { some: { source: "MANUAL" } };
   }
 
   const [total, rows, solvedCount, catalogTotal] = await Promise.all([
@@ -90,9 +92,9 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
         topics: { include: { topic: true } },
         // Total attempts per problem, computed by the database.
         _count: { select: { attempts: true } },
-        // Just the outcomes, newest first — enough to derive "solved?" and
-        // "last outcome" without pulling whole attempt rows.
-        attempts: { orderBy: { attemptedAt: "desc" }, select: { outcome: true } },
+        // Outcomes + source, newest first — enough to derive "solved?",
+        // "last outcome", and whether it's been practised here.
+        attempts: { orderBy: { attemptedAt: "desc" }, select: { outcome: true, source: true } },
         // The next review date, if this problem is on the SM-2 schedule.
         reviewSchedule: { select: { nextReviewDate: true, intervalDays: true } },
       },
@@ -111,6 +113,8 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
     // Reshape Prisma's nested rows into a flat, frontend-friendly object.
     problems: rows.map((p) => {
       const outcomes = p.attempts.map((a) => a.outcome);
+      const practisedHere = p.attempts.some((a) => a.source === "MANUAL");
+      const nextReviewDate = p.reviewSchedule?.nextReviewDate ?? null;
       return {
         id: p.id,
         lcFrontendId: p.lcFrontendId,
@@ -124,7 +128,10 @@ problemsRouter.get("/", async (req: Request, res: Response) => {
         attemptCount: p._count.attempts,
         solved: outcomes.includes("SOLVED"),
         lastOutcome: outcomes[0] ?? null,
-        nextReviewDate: p.reviewSchedule?.nextReviewDate ?? null,
+        nextReviewDate,
+        // Only true once you've logged an attempt here — imported solves don't
+        // put a problem in the review rotation.
+        reviewDue: practisedHere && nextReviewDate !== null && nextReviewDate <= new Date(),
       };
     }),
   });
