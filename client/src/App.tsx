@@ -14,6 +14,7 @@ const SKIP_KEY = 'lc.skipConnect'
 const UNKNOWN_SETTINGS: SettingsResponse = {
   connected: false,
   username: null,
+  avatarUrl: null,
   submissionsSyncedAt: null,
   viaEnvOnly: false,
 }

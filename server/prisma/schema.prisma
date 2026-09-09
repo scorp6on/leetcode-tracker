@@ -286,9 +286,11 @@ model Submission {
 model Settings {
   id Int @id @default(1)
 
-  leetcodeUsername String? @map("leetcode_username")
-  leetcodeSession  String? @map("leetcode_session")
-  leetcodeCsrf     String? @map("leetcode_csrf")
+  leetcodeUsername  String? @map("leetcode_username")
+  leetcodeSession   String? @map("leetcode_session")
+  leetcodeCsrf      String? @map("leetcode_csrf")
+  /// URL of your LeetCode profile picture, refreshed on connect / sync.
+  leetcodeAvatarUrl String? @map("leetcode_avatar_url")
 
   /// When the submission import last completed.
   submissionsSyncedAt DateTime? @map("submissions_synced_at")

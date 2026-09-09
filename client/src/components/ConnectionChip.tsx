@@ -24,6 +24,9 @@ function relTime(iso: string | null): string {
 export function ConnectionChip({ settings, onChanged, onReconnect }: Props) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<null | 'sync' | 'disconnect'>(null)
+  const [avatarBroken, setAvatarBroken] = useState(false)
+
+  const showAvatar = settings.avatarUrl && !avatarBroken && busy !== 'sync'
 
   if (!settings.connected) {
     return (
@@ -57,12 +60,21 @@ export function ConnectionChip({ settings, onChanged, onReconnect }: Props) {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-full border border-line px-3 py-1 text-xs hover:bg-surface-2"
       >
-        <span
-          className={
-            'h-1.5 w-1.5 rounded-full ' +
-            (busy === 'sync' ? 'animate-pulse bg-medium motion-reduce:animate-none' : 'bg-easy')
-          }
-        />
+        {showAvatar ? (
+          <img
+            src={settings.avatarUrl ?? undefined}
+            alt=""
+            onError={() => setAvatarBroken(true)}
+            className="h-4 w-4 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            className={
+              'h-1.5 w-1.5 rounded-full ' +
+              (busy === 'sync' ? 'animate-pulse bg-medium motion-reduce:animate-none' : 'bg-easy')
+            }
+          />
+        )}
         {settings.username ?? 'connected'}
         <span className="text-dim">· {busy === 'sync' ? 'syncing…' : relTime(settings.submissionsSyncedAt)}</span>
       </button>

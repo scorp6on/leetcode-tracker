@@ -21,6 +21,25 @@ function envHasCredentials(): boolean {
   return Boolean(process.env.LEETCODE_SESSION?.trim() && process.env.LEETCODE_CSRF?.trim());
 }
 
+interface MatchedUser {
+  matchedUser: { profile: { userAvatar: string | null } | null } | null;
+}
+
+/** The public LeetCode profile picture URL, or null. Best-effort — never throws. */
+async function fetchAvatar(username: string): Promise<string | null> {
+  if (!username) return null;
+  try {
+    const data = await leetcodeGraphQL<MatchedUser>({
+      query:
+        "query($u: String!) { matchedUser(username: $u) { profile { userAvatar } } }",
+      variables: { u: username },
+    });
+    return data.matchedUser?.profile?.userAvatar ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // --- GET /api/settings ------------------------------------------------
 
 settingsRouter.get("/", async (_req: Request, res: Response) => {
@@ -32,6 +51,7 @@ settingsRouter.get("/", async (_req: Request, res: Response) => {
   res.json({
     connected,
     username: settings?.leetcodeUsername ?? process.env.LEETCODE_USERNAME ?? null,
+    avatarUrl: settings?.leetcodeAvatarUrl ?? null,
     submissionsSyncedAt: settings?.submissionsSyncedAt ?? null,
     // True when creds come only from .env — the app's Disconnect can't clear those.
     viaEnvOnly: !settings?.leetcodeSession && envHasCredentials(),
@@ -76,13 +96,26 @@ settingsRouter.put("/leetcode", async (req: Request, res: Response) => {
     });
   }
 
+  const avatarUrl = await fetchAvatar(username);
+
   await prisma.settings.upsert({
     where: { id: 1 },
-    create: { id: 1, leetcodeSession: session, leetcodeCsrf: csrf, leetcodeUsername: username },
-    update: { leetcodeSession: session, leetcodeCsrf: csrf, leetcodeUsername: username },
+    create: {
+      id: 1,
+      leetcodeSession: session,
+      leetcodeCsrf: csrf,
+      leetcodeUsername: username,
+      leetcodeAvatarUrl: avatarUrl,
+    },
+    update: {
+      leetcodeSession: session,
+      leetcodeCsrf: csrf,
+      leetcodeUsername: username,
+      leetcodeAvatarUrl: avatarUrl,
+    },
   });
 
-  res.json({ connected: true, username });
+  res.json({ connected: true, username, avatarUrl });
 });
 
 // --- DELETE /api/settings/leetcode --------------------------------
@@ -91,7 +124,12 @@ settingsRouter.delete("/leetcode", async (_req: Request, res: Response) => {
   await prisma.settings.upsert({
     where: { id: 1 },
     create: { id: 1 },
-    update: { leetcodeSession: null, leetcodeCsrf: null, leetcodeUsername: null },
+    update: {
+      leetcodeSession: null,
+      leetcodeCsrf: null,
+      leetcodeUsername: null,
+      leetcodeAvatarUrl: null,
+    },
   });
   // Imported submissions and attempts are left in place on purpose.
   res.json({ connected: envHasCredentials() });
@@ -111,10 +149,12 @@ settingsRouter.post("/leetcode/sync", async (_req: Request, res: Response) => {
   try {
     const sync = await runSubmissionSync(auth);
     const seed = await seedBaselineAttempts();
+    // Only overwrite the cached avatar if the refresh succeeded.
+    const avatarUrl = (await fetchAvatar(auth.username)) ?? undefined;
     await prisma.settings.upsert({
       where: { id: 1 },
-      create: { id: 1, submissionsSyncedAt: new Date() },
-      update: { submissionsSyncedAt: new Date() },
+      create: { id: 1, submissionsSyncedAt: new Date(), leetcodeAvatarUrl: avatarUrl },
+      update: { submissionsSyncedAt: new Date(), leetcodeAvatarUrl: avatarUrl },
     });
     res.json({ sync, seed });
   } catch (err) {

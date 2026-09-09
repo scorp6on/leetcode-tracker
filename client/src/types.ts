@@ -152,6 +152,7 @@ export interface DashboardResponse {
 export interface SettingsResponse {
   connected: boolean
   username: string | null
+  avatarUrl: string | null
   submissionsSyncedAt: string | null
   /** Credentials come only from server .env — the app can't disconnect those. */
   viaEnvOnly: boolean
