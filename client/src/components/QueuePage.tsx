@@ -78,14 +78,9 @@ export function QueuePage() {
               onClick={() => setDetailFor(r.problem)}
               className="-m-1 flex flex-1 flex-col items-stretch rounded-lg p-1 text-left hover:bg-surface-2"
             >
-              <span className="flex items-start justify-between gap-3">
-                <span className="text-base font-semibold">{r.problem.title}</span>
-                {r.problem.topics[0] && (
-                  <span className="shrink-0 rounded-full bg-accent-soft/40 px-2.5 py-0.5 text-xs text-accent">
-                    {r.problem.topics[0].name}
-                  </span>
-                )}
-              </span>
+              {/* No topic tag here on purpose — it would give away the pattern
+                  before you predict it. */}
+              <span className="text-base font-semibold">{r.problem.title}</span>
               <span className="mt-2 flex-1 text-sm text-muted">{r.reason.join(' · ')}</span>
             </button>
 

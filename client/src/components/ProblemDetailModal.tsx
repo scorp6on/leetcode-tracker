@@ -30,6 +30,8 @@ export function ProblemDetailModal({ problem, onClose, onLogged }: Props) {
   const [desc, setDesc] = useState<ProblemDescription | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [child, setChild] = useState<null | 'predict' | 'log'>(null)
+  // Hidden by default so they don't spoil the "predict the approach" challenge.
+  const [showTags, setShowTags] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -73,11 +75,34 @@ export function ProblemDetailModal({ problem, onClose, onLogged }: Props) {
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={problem.difficulty} />
-            {problem.topics.map((t) => (
-              <span key={t.slug} className="rounded-full border border-line px-2 py-0.5 text-[11.5px] text-muted">
-                {t.name}
-              </span>
-            ))}
+            {problem.topics.length > 0 &&
+              (showTags ? (
+                <>
+                  {problem.topics.map((t) => (
+                    <span
+                      key={t.slug}
+                      className="rounded-full border border-line px-2 py-0.5 text-[11.5px] text-muted"
+                    >
+                      {t.name}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setShowTags(false)}
+                    className="text-[11.5px] text-dim hover:text-muted"
+                  >
+                    hide
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowTags(true)}
+                  className="rounded-full border border-dashed border-line px-2 py-0.5 text-[11.5px] text-dim hover:text-muted"
+                >
+                  Reveal topic tags (spoiler)
+                </button>
+              ))}
           </div>
         </div>
 
