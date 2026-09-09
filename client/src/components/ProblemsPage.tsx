@@ -168,10 +168,18 @@ export function ProblemsPage() {
                 <button
                   type="button"
                   onClick={() => setPredictTarget(p)}
-                  className="shrink-0 rounded border border-line px-2 py-1 text-xs text-muted opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover:text-ink"
+                  className="shrink-0 rounded border border-line px-2 py-1 text-xs text-muted opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink"
                 >
                   Predict
                 </button>
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 rounded border border-line px-2 py-1 text-xs text-muted opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink"
+                >
+                  LeetCode ↗
+                </a>
                 <span className="w-14 shrink-0 text-right text-sm text-dim">
                   {p.acRate != null ? `${p.acRate.toFixed(1)}%` : '—'}
                 </span>
