@@ -148,6 +148,21 @@ export interface DashboardResponse {
   }[]
 }
 
+/** Response of GET /api/settings. */
+export interface SettingsResponse {
+  connected: boolean
+  username: string | null
+  submissionsSyncedAt: string | null
+  /** Credentials come only from server .env — the app can't disconnect those. */
+  viaEnvOnly: boolean
+}
+
+/** Result of POST /api/settings/leetcode/sync. */
+export interface LeetCodeSyncResult {
+  sync: { imported: number; accepted: number; distinctSolved: number; unmatched: string[] }
+  seed: { solvedProblems: number; alreadySeeded: number; created: number; unmatched: number }
+}
+
 /** A stored attempt, as returned by the API. */
 export interface Attempt {
   id: number

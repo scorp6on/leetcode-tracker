@@ -13,9 +13,11 @@ import type {
   NewPrediction,
   Prediction,
   PredictionAccuracy,
+  LeetCodeSyncResult,
   ProblemsQuery,
   ProblemsResponse,
   RecommendationsResponse,
+  SettingsResponse,
   TopicOption,
 } from './types'
 
@@ -56,8 +58,46 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return data as T
 }
 
+/**
+ * PUT/DELETE with an optional JSON body. Throws the server's `error` message
+ * verbatim (no wrapper prefix) so it can be shown to the user directly.
+ */
+async function sendJson<T>(method: 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    const message =
+      (data && typeof data === 'object' && 'error' in data && String(data.error)) ||
+      `${res.status} ${res.statusText}`
+    throw new Error(message)
+  }
+  return data as T
+}
+
 export function fetchProblems(query: ProblemsQuery): Promise<ProblemsResponse> {
   return getJson<ProblemsResponse>(`/api/problems${toQueryString({ ...query })}`)
+}
+
+// --- Settings / LeetCode connection ---------------------------------
+
+export function fetchSettings(): Promise<SettingsResponse> {
+  return getJson<SettingsResponse>('/api/settings')
+}
+
+export function connectLeetCode(session: string, csrf: string): Promise<{ connected: true; username: string }> {
+  return sendJson('PUT', '/api/settings/leetcode', { session, csrf })
+}
+
+export function disconnectLeetCode(): Promise<{ connected: boolean }> {
+  return sendJson('DELETE', '/api/settings/leetcode')
+}
+
+export function syncLeetCode(): Promise<LeetCodeSyncResult> {
+  return postJson<LeetCodeSyncResult>('/api/settings/leetcode/sync', {})
 }
 
 export function fetchAttempts(problemId: number): Promise<{ attempts: Attempt[] }> {
