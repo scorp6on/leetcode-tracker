@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { disconnectLeetCode, syncLeetCode } from '../api'
 import type { SettingsResponse } from '../types'
 
@@ -25,8 +25,26 @@ export function ConnectionChip({ settings, onChanged, onReconnect }: Props) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<null | 'sync' | 'disconnect'>(null)
   const [avatarBroken, setAvatarBroken] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const showAvatar = settings.avatarUrl && !avatarBroken && busy !== 'sync'
+
+  // Close the menu on an outside click or Escape.
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
 
   if (!settings.connected) {
     return (
@@ -54,7 +72,7 @@ export function ConnectionChip({ settings, onChanged, onReconnect }: Props) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
