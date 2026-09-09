@@ -23,8 +23,41 @@
   --font-display: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
 }
 
+/* This app is dark-only. Tell the browser so form controls and — the reason
+   this is here — scrollbars render in dark mode instead of light. */
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-bg);
+}
+
 body {
   @apply bg-bg text-ink antialiased;
+}
+
+/* Explicit dark scrollbars for finer control than color-scheme alone. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-2) transparent;
+}
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-2);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-line);
+  background-clip: padding-box;
 }
 
 /* Give the range sliders a dark, LeetCode-ish look (native styling is too
