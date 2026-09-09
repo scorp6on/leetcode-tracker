@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { createAttempt } from '../api'
-import type { FailureMode, Outcome, Problem } from '../types'
+import { createAttempt, fetchAttempts, fetchPredictions } from '../api'
+import type { Attempt, FailureMode, Outcome, Prediction, Problem } from '../types'
 
 const OUTCOMES: Outcome[] = ['SOLVED', 'STRUGGLED', 'FAILED']
 const OUTCOME_LABEL: Record<Outcome, string> = {
@@ -18,6 +18,12 @@ const FAILURE_MODES: { value: FailureMode; label: string }[] = [
   { value: 'SYNTAX_ERROR', label: 'Syntax error' },
   { value: 'RAN_OUT_OF_TIME', label: 'Ran out of time' },
 ]
+const FM_LABEL: Record<string, string> = Object.fromEntries(
+  FAILURE_MODES.map((f) => [f.value, f.label]),
+)
+
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 interface Props {
   problem: Problem
@@ -25,14 +31,19 @@ interface Props {
   onSaved: () => void
 }
 
-/** The "Log attempt" modal (see mockup): outcome, time, failure mode, confidence. */
+/** The "Log attempt" modal (see mockup): prior history, then outcome, time,
+ *  failure mode, confidence, notes. */
 export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
   const [outcome, setOutcome] = useState<Outcome>('SOLVED')
   const [minutes, setMinutes] = useState(15)
   const [failureMode, setFailureMode] = useState<FailureMode | ''>('')
   const [confidence, setConfidence] = useState(3)
+  const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [pastAttempts, setPastAttempts] = useState<Attempt[]>([])
+  const [predictions, setPredictions] = useState<Prediction[]>([])
 
   // Close on Escape.
   useEffect(() => {
@@ -42,6 +53,16 @@ export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Load this problem's history.
+  useEffect(() => {
+    fetchAttempts(problem.id)
+      .then((r) => setPastAttempts(r.attempts))
+      .catch(() => setPastAttempts([]))
+    fetchPredictions(problem.id)
+      .then((r) => setPredictions(r.predictions))
+      .catch(() => setPredictions([]))
+  }, [problem.id])
 
   async function save() {
     setSaving(true)
@@ -53,6 +74,7 @@ export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
         minutes,
         confidence,
         failureMode: failureMode || null,
+        notes: notes.trim() || null,
       })
       onSaved()
     } catch (e) {
@@ -62,6 +84,9 @@ export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
   }
 
   const topicName = problem.topics[0]?.name ?? 'No topic'
+  const openPrediction = predictions.find((p) => p.resolvedAt === null)
+  const lastResolved = predictions.find((p) => p.resolvedAt !== null)
+  const hasHistory = pastAttempts.length > 0 || openPrediction || lastResolved
 
   return (
     <div
@@ -69,13 +94,43 @@ export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold">Log attempt</h2>
         <p className="mt-0.5 text-sm text-muted">
           {problem.title} &middot; {topicName}
         </p>
+
+        {/* History */}
+        {hasHistory && (
+          <div className="mt-4 rounded-lg border border-line bg-bg/40 p-3 text-xs">
+            {openPrediction && (
+              <p className="text-accent">
+                Open prediction:{' '}
+                {openPrediction.predictedTopicSlugs.join(', ')} — scored when you save
+              </p>
+            )}
+            {lastResolved && (
+              <p className={lastResolved.hit ? 'text-easy' : 'text-hard'}>
+                Last prediction: {lastResolved.predictedTopicSlugs.join(', ')} —{' '}
+                {lastResolved.hit ? 'hit' : 'missed'}
+              </p>
+            )}
+            {pastAttempts.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-muted">
+                {pastAttempts.slice(0, 4).map((a) => (
+                  <li key={a.id}>
+                    {shortDate(a.attemptedAt)} &middot; {OUTCOME_LABEL[a.outcome]}
+                    {a.failureMode ? ` · ${FM_LABEL[a.failureMode]}` : ''}
+                    {a.source === 'IMPORTED' ? ' (imported)' : ''}
+                  </li>
+                ))}
+                {pastAttempts.length > 4 && <li>+{pastAttempts.length - 4} more</li>}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Outcome — segmented control */}
         <fieldset className="mt-5">
@@ -157,6 +212,21 @@ export function LogAttemptModal({ problem, onClose, onSaved }: Props) {
             value={confidence}
             onChange={(e) => setConfidence(Number(e.target.value))}
             className="mt-2"
+          />
+        </div>
+
+        {/* Notes */}
+        <div className="mt-5">
+          <label htmlFor="notes" className="text-sm text-muted">
+            Notes (optional)
+          </label>
+          <textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="What tripped you up, what to remember next time…"
+            className="mt-2 w-full resize-y rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm placeholder:text-dim"
           />
         </div>
 
