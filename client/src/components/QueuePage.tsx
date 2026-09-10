@@ -46,8 +46,8 @@ export function QueuePage() {
 
       {data?.mode === 'recency' && recs.length > 0 && (
         <p className="mt-4 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted">
-          Starting from your most recent LeetCode solves. Once you log your first attempt here,
-          this switches to spaced-repetition scheduling.
+          Showing recent solves for now. As you log attempts here, the queue shifts to
+          spaced-repetition review and your recent failure modes.
         </p>
       )}
 

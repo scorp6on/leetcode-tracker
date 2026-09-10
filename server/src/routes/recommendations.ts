@@ -1,15 +1,27 @@
 /**
  * GET /api/recommendations — the "Today's queue" screen.
  *
- * This route does the DB assembly; the ranking math is the pure `recommend()`
- * in services/recommendations.ts.
+ * This route does the DB assembly; the ranking math is the pure `recommend()` /
+ * `recommendRecent()` in services/recommendations.ts.
+ *
+ * Shape of the queue:
+ *   - "due" only counts problems you've actually practised HERE. An imported
+ *     solve seeds a schedule dated `last-solve + 1 day`, which would otherwise
+ *     read as hundreds of days overdue and flood the queue.
+ *   - When the engine can't fill the queue (a fresh account, few manual
+ *     attempts), the remaining slots are topped up with your most recent solves.
  */
 
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { $Enums } from "@prisma/client";
 import { prisma } from "../db";
-import { recommend, recommendRecent, type RecCandidate } from "../services/recommendations";
+import {
+  recommend,
+  recommendRecent,
+  type RecCandidate,
+  type Recommendation,
+} from "../services/recommendations";
 
 type FailureMode = $Enums.FailureMode;
 
@@ -19,6 +31,67 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(30).default(8),
 });
 
+const PROBLEM_SELECT = {
+  id: true,
+  lcFrontendId: true,
+  slug: true,
+  title: true,
+  difficulty: true,
+  url: true,
+  topics: { select: { topic: { select: { slug: true, name: true } } } },
+} as const;
+
+/** Turn ranked (problemId + score + reason) into the response's problem cards,
+ *  preserving rank order. */
+async function hydrate(ranked: Recommendation[]) {
+  const problems = await prisma.problem.findMany({
+    where: { id: { in: ranked.map((r) => r.problemId) } },
+    select: PROBLEM_SELECT,
+  });
+  const byId = new Map(problems.map((p) => [p.id, p]));
+  return ranked.flatMap((r) => {
+    const p = byId.get(r.problemId);
+    if (!p) return [];
+    return [
+      {
+        score: r.score,
+        components: r.components,
+        reason: r.reason,
+        problem: {
+          id: p.id,
+          lcFrontendId: p.lcFrontendId,
+          slug: p.slug,
+          title: p.title,
+          difficulty: p.difficulty,
+          url: p.url,
+          topics: p.topics.map((t) => ({ slug: t.topic.slug, name: t.topic.name })),
+        },
+      },
+    ];
+  });
+}
+
+/** Your most recently solved problems, ranked recent-first, minus any excluded. */
+async function recentSolveRanked(
+  now: Date,
+  limit: number,
+  excludeIds: Set<number> = new Set(),
+): Promise<Recommendation[]> {
+  if (limit <= 0) return [];
+  const groups = await prisma.submission.groupBy({
+    by: ["problemId"],
+    where: { isAccepted: true, problemId: { not: null } },
+    _max: { submittedAt: true },
+  });
+  const candidates = groups
+    .filter(
+      (g): g is typeof g & { problemId: number } =>
+        g.problemId !== null && !excludeIds.has(g.problemId),
+    )
+    .map((g) => ({ problemId: g.problemId, lastSolvedAt: g._max.submittedAt ?? now }));
+  return recommendRecent(candidates, now, limit);
+}
+
 recommendationsRouter.get("/", async (req: Request, res: Response) => {
   const parsed = querySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -27,70 +100,26 @@ recommendationsRouter.get("/", async (req: Request, res: Response) => {
   const { limit } = parsed.data;
   const now = new Date();
 
-  // --- First sign-in: nothing has been practised here yet. Every imported
-  //     solve looks massively overdue, so lead with the MOST RECENT solves
-  //     instead. This mode ends the moment the first manual attempt is logged.
+  // --- Fresh account: nothing practised here yet -> pure recency. ----------
   const manualCount = await prisma.attempt.count({ where: { source: "MANUAL" } });
   if (manualCount === 0) {
-    const recentGroups = await prisma.submission.groupBy({
-      by: ["problemId"],
-      where: { isAccepted: true, problemId: { not: null } },
-      _max: { submittedAt: true },
+    const ranked = await recentSolveRanked(now, limit);
+    return res.json({
+      recommendations: await hydrate(ranked),
+      meta: await buildMeta(now),
+      mode: "recency",
     });
-
-    if (recentGroups.length > 0) {
-      const recentCandidates = recentGroups
-        .filter((g): g is typeof g & { problemId: number } => g.problemId !== null)
-        .map((g) => ({ problemId: g.problemId, lastSolvedAt: g._max.submittedAt ?? now }));
-
-      const ranked = recommendRecent(recentCandidates, now, limit);
-      const problems = await prisma.problem.findMany({
-        where: { id: { in: ranked.map((r) => r.problemId) } },
-        select: {
-          id: true,
-          lcFrontendId: true,
-          slug: true,
-          title: true,
-          difficulty: true,
-          url: true,
-          topics: { select: { topic: { select: { slug: true, name: true } } } },
-        },
-      });
-      const byId = new Map(problems.map((p) => [p.id, p]));
-
-      const recommendations = ranked
-        .map((r) => {
-          const p = byId.get(r.problemId);
-          return p
-            ? {
-                score: r.score,
-                components: r.components,
-                reason: r.reason,
-                problem: {
-                  id: p.id,
-                  lcFrontendId: p.lcFrontendId,
-                  slug: p.slug,
-                  title: p.title,
-                  difficulty: p.difficulty,
-                  url: p.url,
-                  topics: p.topics.map((t) => ({ slug: t.topic.slug, name: t.topic.name })),
-                },
-              }
-            : null;
-        })
-        .filter((x): x is NonNullable<typeof x> => x !== null);
-
-      return res.json({ recommendations, meta: await buildMeta(now), mode: "recency" });
-    }
   }
 
-  // --- Candidates: scheduled problems that are due now, or that you've hit a
-  //     failure mode on. ------------------------------------------------------
+  // --- Engine candidates: due AND practised here, or failure-mode-tagged. --
   const candidateRows = await prisma.problem.findMany({
     where: {
       reviewSchedule: { isNot: null },
       OR: [
-        { reviewSchedule: { nextReviewDate: { lte: now } } },
+        {
+          reviewSchedule: { nextReviewDate: { lte: now } },
+          attempts: { some: { source: "MANUAL" } },
+        },
         { failureModes: { some: {} } },
       ],
     },
@@ -110,7 +139,7 @@ recommendationsRouter.get("/", async (req: Request, res: Response) => {
       nextReviewDate: p.reviewSchedule!.nextReviewDate,
     }));
 
-  // --- Your recent failure modes (most recent first). --------------------
+  // Your recent failure modes (most recent first).
   const recentRows = await prisma.attempt.findMany({
     where: { failureMode: { not: null } },
     orderBy: { attemptedAt: "desc" },
@@ -121,7 +150,7 @@ recommendationsRouter.get("/", async (req: Request, res: Response) => {
     .map((r) => r.failureMode)
     .filter((m): m is FailureMode => m !== null);
 
-  // --- Where you usually hit each failure mode (top 2 topics per mode). ---
+  // Where you usually hit each failure mode (top 2 topics per mode).
   const pfmRows = await prisma.problemFailureMode.findMany({
     select: {
       failureMode: true,
@@ -145,29 +174,23 @@ recommendationsRouter.get("/", async (req: Request, res: Response) => {
       .map(([slug]) => slug);
   }
 
-  const ranked = recommend({ candidates, recentFailures, homeTopicsByMode, today: now, limit });
-
-  // Hydrate each result with the problem's display fields.
-  const byId = new Map(candidateRows.map((p) => [p.id, p]));
-  const recommendations = ranked.map((r) => {
-    const p = byId.get(r.problemId)!;
-    return {
-      score: r.score,
-      components: r.components,
-      reason: r.reason,
-      problem: {
-        id: p.id,
-        lcFrontendId: p.lcFrontendId,
-        slug: p.slug,
-        title: p.title,
-        difficulty: p.difficulty,
-        url: p.url,
-        topics: p.topics.map((t) => ({ slug: t.topic.slug, name: t.topic.name })),
-      },
-    };
+  const engineRanked = recommend({
+    candidates,
+    recentFailures,
+    homeTopicsByMode,
+    today: now,
+    limit,
   });
 
-  res.json({ recommendations, meta: await buildMeta(now), mode: "engine" });
+  // Top up any empty slots with recent solves (not ones the engine already picked).
+  const chosen = new Set(engineRanked.map((r) => r.problemId));
+  const topUp = await recentSolveRanked(now, limit - engineRanked.length, chosen);
+
+  res.json({
+    recommendations: await hydrate([...engineRanked, ...topUp]),
+    meta: await buildMeta(now),
+    mode: engineRanked.length > 0 ? "engine" : "recency",
+  });
 });
 
 /** The stat tiles under the queue: streak, solved count, top failure mode,
