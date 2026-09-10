@@ -4,7 +4,12 @@
  *
  * Two entry points:
  *   - `npm run sync:submissions` runs the CLI wrapper at the bottom of this file.
- *   - The "Connect LeetCode" screen calls `runSubmissionSync()` from an endpoint.
+ *   - The "Connect LeetCode" screen / auto-sync call `runSubmissionSync()`.
+ *
+ * Uses LeetCode's GraphQL `submissionList` query (not the `/api/submissions/`
+ * REST endpoint, which LeetCode blocks from datacenter IPs like a host's). The
+ * trade-off: GraphQL doesn't return the submission source, so `code` is stored
+ * empty. Nothing in the app displays it.
  *
  * Idempotent — each submission is UPSERTed by its LeetCode id, so re-running
  * refreshes the catalog link and adds anything new. Your reflective `Attempt`
@@ -12,32 +17,48 @@
  */
 
 import { prisma } from "../db";
-import { leetcodeRestGet, LeetCodeAuthError } from "./client";
+import { leetcodeGraphQL, LeetCodeAuthError } from "./client";
 import { buildAuthHeaders, resolveLeetCodeAuth, type LeetCodeAuth } from "./auth";
 
 // --- Tuning knobs --------------------------------------------------------
-const PAGE_LIMIT = 20; // LeetCode caps this endpoint at 20 per request
-const DELAY_MS = 1500; // this endpoint is rate-limit sensitive; go slow
+const PAGE_LIMIT = 20; // LeetCode caps submissionList at 20 per request
+const DELAY_MS = 1200; // be polite between pages
 const MAX_PAGES = 500; // safety valve: 500 * 20 = 10k submissions
 
-// Shape of one entry in the REST response's `submissions_dump` array. LeetCode
-// sends more fields than this; we only declare the ones we use.
-interface RawSubmission {
-  id: number;
+const SUBMISSION_LIST_QUERY = `
+  query submissionList($offset: Int!, $limit: Int!) {
+    submissionList(offset: $offset, limit: $limit) {
+      hasNext
+      submissions {
+        id
+        titleSlug
+        statusDisplay
+        lang
+        runtime
+        memory
+        timestamp
+      }
+    }
+  }
+`;
+
+/** One entry from the GraphQL submissionList response. */
+interface GqlSubmission {
+  id: string;
+  titleSlug: string;
+  statusDisplay: string; // "Accepted", "Wrong Answer", ...
   lang: string;
-  timestamp: number | string; // unix SECONDS
-  status_display: string; // "Accepted", "Wrong Answer", ...
   runtime: string;
   memory: string;
-  title: string;
-  title_slug: string;
-  code: string;
+  timestamp: string; // unix SECONDS, as a string
 }
 
-interface SubmissionsPage {
-  submissions_dump: RawSubmission[];
-  has_next: boolean;
-  last_key: string | null;
+interface SubmissionListResponse {
+  submissionList: {
+    hasNext: boolean | null;
+    // null when the session isn't valid.
+    submissions: GqlSubmission[] | null;
+  } | null;
 }
 
 export interface SubmissionSyncResult {
@@ -72,7 +93,7 @@ export interface SyncOptions {
 }
 
 /**
- * Page through the submissions REST endpoint, upserting each row.
+ * Page through GraphQL `submissionList`, upserting each row.
  */
 export async function runSubmissionSync(
   auth: LeetCodeAuth,
@@ -99,39 +120,46 @@ export async function runSubmissionSync(
   const solvedSlugs = new Set<string>();
 
   while (pages < MAX_PAGES) {
-    const page = await leetcodeRestGet<SubmissionsPage>(
-      `/api/submissions/?offset=${offset}&limit=${PAGE_LIMIT}`,
+    const data = await leetcodeGraphQL<SubmissionListResponse>(
+      { query: SUBMISSION_LIST_QUERY, variables: { offset, limit: PAGE_LIMIT } },
       headers,
     );
 
-    const batch = page.submissions_dump ?? [];
+    const list = data.submissionList;
+    if (!list || list.submissions === null) {
+      throw new LeetCodeAuthError(
+        "LeetCode rejected the request — your session has likely expired. Reconnect it.",
+      );
+    }
+
+    const batch = list.submissions;
     if (batch.length === 0) break;
 
     // Incremental: if every row here is already stored, we've caught up.
-    if (incremental && batch.every((s) => knownIds.has(String(s.id)))) break;
+    if (incremental && batch.every((s) => knownIds.has(s.id))) break;
 
     for (const s of batch) {
-      const problemId = problemIdBySlug.get(s.title_slug) ?? null;
-      if (problemId === null) unmatchedSlugs.add(s.title_slug);
+      const problemId = problemIdBySlug.get(s.titleSlug) ?? null;
+      if (problemId === null) unmatchedSlugs.add(s.titleSlug);
 
-      const isAccepted = s.status_display === "Accepted";
+      const isAccepted = s.statusDisplay === "Accepted";
       if (isAccepted) {
         accepted += 1;
-        solvedSlugs.add(s.title_slug);
+        solvedSlugs.add(s.titleSlug);
       }
 
       await prisma.submission.upsert({
-        where: { lcSubmissionId: String(s.id) },
+        where: { lcSubmissionId: s.id },
         create: {
-          lcSubmissionId: String(s.id),
+          lcSubmissionId: s.id,
           problemId,
-          titleSlug: s.title_slug,
+          titleSlug: s.titleSlug,
           lang: s.lang,
-          statusDisplay: s.status_display,
+          statusDisplay: s.statusDisplay,
           isAccepted,
           runtime: s.runtime || null,
           memory: s.memory || null,
-          code: s.code ?? "",
+          code: "", // GraphQL submissionList doesn't return the source
           submittedAt: new Date(Number(s.timestamp) * 1000),
         },
         // A submission is immutable on LeetCode; the only thing worth refreshing
@@ -144,7 +172,7 @@ export async function runSubmissionSync(
     onProgress?.({ imported, accepted });
 
     pages += 1;
-    if (!page.has_next) break;
+    if (!list.hasNext) break;
     offset += PAGE_LIMIT;
     await sleep(DELAY_MS);
   }

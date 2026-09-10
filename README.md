@@ -185,6 +185,11 @@ per-device copy). If you also run locally against the same cloud DB, set
 `SYNC_INTERVAL_MINUTES=0` in your local `server/.env` so only the hosted instance
 auto-syncs.
 
+Submission import uses LeetCode's GraphQL `submissionList` query, which works
+from a host's IP (their `/api/submissions/` REST endpoint does not). If a
+provider's IP is still blocked, `npm run sync:submissions` from your own machine
+against the cloud `DATABASE_URL` is the fallback.
+
 **Security:** Basic Auth + the platform's HTTPS + `APP_SECRET_KEY` encryption are
 the mitigations for putting your LeetCode session on a hosted DB. It's still your
 session on a third party — acceptable for a personal single-user deployment, not
@@ -244,7 +249,7 @@ server/
       predictions.ts          pure prediction scoring  (+ .test.ts)
       dashboard.ts            pure per-topic stat merge  (+ .test.ts)
     leetcode/
-      client.ts               fetch wrappers for LeetCode's GraphQL / REST
+      client.ts               fetch wrapper for LeetCode's GraphQL API
       auth.ts                  resolves credentials (DB row, then .env)
       secretBox.ts             optional at-rest encryption for stored cookies
       syncCatalog.ts           catalog import
@@ -270,7 +275,7 @@ client/
 | `review_schedule` | one row per problem: SM-2 ease factor, interval, repetitions, next review date |
 | `predictions` | before-attempt pattern guesses, scored on the next attempt |
 | `problem_failure_modes` | which failure modes you've hit on each problem, with counts (built lazily) |
-| `submissions` | raw LeetCode submission cache (problem, status, timestamp, code) |
+| `submissions` | LeetCode submission cache (problem, status, timestamp) |
 | `settings` | single row — the LeetCode connection + last sync time |
 
 ---
