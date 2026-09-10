@@ -185,10 +185,11 @@ per-device copy). If you also run locally against the same cloud DB, set
 `SYNC_INTERVAL_MINUTES=0` in your local `server/.env` so only the hosted instance
 auto-syncs.
 
-Submission import uses LeetCode's GraphQL `submissionList` query, which works
-from a host's IP (their `/api/submissions/` REST endpoint does not). If a
-provider's IP is still blocked, `npm run sync:submissions` from your own machine
-against the cloud `DATABASE_URL` is the fallback.
+Submission sync uses the **public** `recentAcSubmissionList` GraphQL query — the
+same data the LeetCode profile page shows. It works from any IP, including a
+host's (LeetCode's authenticated submission endpoints do not). The trade-off:
+it's the last ~20 **accepted** solves only, so it keeps you current rather than
+importing a full back-catalogue.
 
 **Security:** Basic Auth + the platform's HTTPS + `APP_SECRET_KEY` encryption are
 the mitigations for putting your LeetCode session on a hosted DB. It's still your
@@ -208,7 +209,7 @@ something to share access to.
 | `npm run dev` | API with reload |
 | `npm test` | unit tests (SM-2, predictions, recommendations, dashboard) |
 | `npm run sync:catalog` | (re)import the problem catalog + topics + acceptance rates |
-| `npm run sync:submissions` | import your LeetCode submission history (needs credentials) |
+| `npm run sync:submissions` | pull your recent accepted solves from LeetCode |
 | `npm run seed:from-submissions` | create baseline `SOLVED` attempts from imported submissions |
 | `npm run prisma:studio` | browse the database |
 | `npm run build` / `npm start` | compile to `dist/` and run |
@@ -253,7 +254,7 @@ server/
       auth.ts                  resolves credentials (DB row, then .env)
       secretBox.ts             optional at-rest encryption for stored cookies
       syncCatalog.ts           catalog import
-      syncSubmissions.ts       submission import (full + incremental)
+      syncSubmissions.ts       recent-solves import (public recentAcSubmissionList)
       autoSync.ts              the interval job
 client/
   src/

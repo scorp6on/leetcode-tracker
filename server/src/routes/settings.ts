@@ -152,9 +152,7 @@ settingsRouter.post("/leetcode/sync", async (_req: Request, res: Response) => {
   }
 
   try {
-    // First run pulls everything; later "Sync now" clicks only fetch new pages.
-    const incremental = (await prisma.submission.count()) > 0;
-    const sync = await runSubmissionSync(auth, { incremental });
+    const sync = await runSubmissionSync(auth);
     const seed = await seedBaselineAttempts();
     // Only overwrite the cached avatar if the refresh succeeded.
     const avatarUrl = (await fetchAvatar(auth.username)) ?? undefined;

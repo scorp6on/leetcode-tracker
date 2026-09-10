@@ -21,7 +21,7 @@ async function tick(): Promise<void> {
   running = true;
   try {
     const auth = await resolveLeetCodeAuth();
-    const sync = await runSubmissionSync(auth, { incremental: true });
+    const sync = await runSubmissionSync(auth);
     const seed = await seedBaselineAttempts();
     await prisma.settings.upsert({
       where: { id: 1 },

@@ -1,79 +1,66 @@
 /**
- * Submission sync: import your LeetCode submission history into the `submissions`
- * table.
+ * Submission sync: pull your recent LeetCode solves into the `submissions` table.
  *
- * Two entry points:
- *   - `npm run sync:submissions` runs the CLI wrapper at the bottom of this file.
+ * Entry points:
+ *   - `npm run sync:submissions` runs the CLI wrapper at the bottom.
  *   - The "Connect LeetCode" screen / auto-sync call `runSubmissionSync()`.
  *
- * Uses LeetCode's GraphQL `submissionList` query (not the `/api/submissions/`
- * REST endpoint, which LeetCode blocks from datacenter IPs like a host's). The
- * trade-off: GraphQL doesn't return the submission source, so `code` is stored
- * empty. Nothing in the app displays it.
+ * Uses the PUBLIC GraphQL `recentAcSubmissionList(username, limit)` query. It
+ * works from any IP — including a datacenter host — unlike LeetCode's
+ * `/api/submissions/` REST endpoint and the authenticated `submissionList`
+ * query, which both return nothing to cloud IPs.
  *
- * Idempotent — each submission is UPSERTed by its LeetCode id, so re-running
- * refreshes the catalog link and adds anything new. Your reflective `Attempt`
- * rows live in a different table and are untouched.
+ * Trade-offs of the public endpoint:
+ *   - accepted submissions only (no Wrong Answer / TLE rows — but those never
+ *     produced anything downstream anyway)
+ *   - roughly the last 20, so it keeps you current rather than importing a full
+ *     back-catalogue
+ *   - no language / runtime / memory / source code
+ *
+ * Idempotent — each submission is UPSERTed by its LeetCode id.
  */
 
 import { prisma } from "../db";
 import { leetcodeGraphQL, LeetCodeAuthError } from "./client";
 import { buildAuthHeaders, resolveLeetCodeAuth, type LeetCodeAuth } from "./auth";
 
-// --- Tuning knobs --------------------------------------------------------
-const PAGE_LIMIT = 20; // LeetCode caps submissionList at 20 per request
-const DELAY_MS = 1200; // be polite between pages
-const MAX_PAGES = 500; // safety valve: 500 * 20 = 10k submissions
+// LeetCode caps this endpoint around 20 regardless of what we ask for.
+const RECENT_LIMIT = 20;
 
-const SUBMISSION_LIST_QUERY = `
-  query submissionList($offset: Int!, $limit: Int!) {
-    submissionList(offset: $offset, limit: $limit) {
-      hasNext
-      submissions {
-        id
-        titleSlug
-        statusDisplay
-        lang
-        runtime
-        memory
-        timestamp
-      }
+const RECENT_AC_QUERY = `
+  query recentAcSubmissions($username: String!, $limit: Int!) {
+    recentAcSubmissionList(username: $username, limit: $limit) {
+      id
+      titleSlug
+      timestamp
     }
   }
 `;
 
-/** One entry from the GraphQL submissionList response. */
-interface GqlSubmission {
+interface RecentAcSubmission {
   id: string;
   titleSlug: string;
-  statusDisplay: string; // "Accepted", "Wrong Answer", ...
-  lang: string;
-  runtime: string;
-  memory: string;
   timestamp: string; // unix SECONDS, as a string
 }
 
-interface SubmissionListResponse {
-  submissionList: {
-    hasNext: boolean | null;
-    // null when the session isn't valid.
-    submissions: GqlSubmission[] | null;
-  } | null;
+interface RecentAcResponse {
+  // null when the username is unknown.
+  recentAcSubmissionList: RecentAcSubmission[] | null;
 }
 
 export interface SubmissionSyncResult {
-  /** Total submissions stored (created or refreshed). */
+  /** Submissions newly stored this run. */
   imported: number;
-  /** How many of those were "Accepted". */
+  /** Accepted submissions seen (all of them, with this endpoint). */
   accepted: number;
-  /** Distinct problems with at least one accepted submission. */
+  /** Distinct problems across the returned submissions. */
   distinctSolved: number;
-  /** Slugs seen in submissions but missing from the catalog. */
+  /** Slugs not found in the catalog. */
   unmatched: string[];
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export interface SyncOptions {
+  onProgress?: (progress: { imported: number; accepted: number }) => void;
 }
 
 /** slug -> our Problem.id, for linking submissions to the catalog. */
@@ -82,104 +69,70 @@ async function loadProblemIdBySlug(): Promise<Map<string, number>> {
   return new Map(rows.map((row) => [row.slug, row.id]));
 }
 
-export interface SyncOptions {
-  onProgress?: (progress: { imported: number; accepted: number }) => void;
-  /**
-   * Stop as soon as a whole page contains only submissions we already have.
-   * The endpoint is newest-first, so new submissions are always at the front —
-   * this makes a routine sync fetch roughly one page.
-   */
-  incremental?: boolean;
-}
-
-/**
- * Page through GraphQL `submissionList`, upserting each row.
- */
 export async function runSubmissionSync(
   auth: LeetCodeAuth,
   options: SyncOptions = {},
 ): Promise<SubmissionSyncResult> {
-  const { onProgress, incremental = false } = options;
-  const headers = buildAuthHeaders(auth);
+  if (!auth.username) {
+    throw new LeetCodeAuthError(
+      "No LeetCode username on record — reconnect your account.",
+    );
+  }
+
   const problemIdBySlug = await loadProblemIdBySlug();
+  const knownIds = new Set(
+    (await prisma.submission.findMany({ select: { lcSubmissionId: true } })).map(
+      (r) => r.lcSubmissionId,
+    ),
+  );
 
-  // For an incremental run, the ids we already hold — so we can stop early.
-  const knownIds = incremental
-    ? new Set(
-        (await prisma.submission.findMany({ select: { lcSubmissionId: true } })).map(
-          (r) => r.lcSubmissionId,
-        ),
-      )
-    : new Set<string>();
+  const data = await leetcodeGraphQL<RecentAcResponse>(
+    { query: RECENT_AC_QUERY, variables: { username: auth.username, limit: RECENT_LIMIT } },
+    buildAuthHeaders(auth),
+  );
 
-  let offset = 0;
-  let pages = 0;
+  const list = data.recentAcSubmissionList;
+  if (list === null) {
+    throw new LeetCodeAuthError(
+      `LeetCode has no submissions for "${auth.username}". Check the connected username, or reconnect.`,
+    );
+  }
+
   let imported = 0;
-  let accepted = 0;
   const unmatchedSlugs = new Set<string>();
   const solvedSlugs = new Set<string>();
 
-  while (pages < MAX_PAGES) {
-    const data = await leetcodeGraphQL<SubmissionListResponse>(
-      { query: SUBMISSION_LIST_QUERY, variables: { offset, limit: PAGE_LIMIT } },
-      headers,
-    );
+  for (const s of list) {
+    const problemId = problemIdBySlug.get(s.titleSlug) ?? null;
+    if (problemId === null) unmatchedSlugs.add(s.titleSlug);
+    solvedSlugs.add(s.titleSlug);
 
-    const list = data.submissionList;
-    if (!list || list.submissions === null) {
-      throw new LeetCodeAuthError(
-        "LeetCode rejected the request — your session has likely expired. Reconnect it.",
-      );
-    }
-
-    const batch = list.submissions;
-    if (batch.length === 0) break;
-
-    // Incremental: if every row here is already stored, we've caught up.
-    if (incremental && batch.every((s) => knownIds.has(s.id))) break;
-
-    for (const s of batch) {
-      const problemId = problemIdBySlug.get(s.titleSlug) ?? null;
-      if (problemId === null) unmatchedSlugs.add(s.titleSlug);
-
-      const isAccepted = s.statusDisplay === "Accepted";
-      if (isAccepted) {
-        accepted += 1;
-        solvedSlugs.add(s.titleSlug);
-      }
-
-      await prisma.submission.upsert({
-        where: { lcSubmissionId: s.id },
-        create: {
-          lcSubmissionId: s.id,
-          problemId,
-          titleSlug: s.titleSlug,
-          lang: s.lang,
-          statusDisplay: s.statusDisplay,
-          isAccepted,
-          runtime: s.runtime || null,
-          memory: s.memory || null,
-          code: "", // GraphQL submissionList doesn't return the source
-          submittedAt: new Date(Number(s.timestamp) * 1000),
-        },
-        // A submission is immutable on LeetCode; the only thing worth refreshing
-        // is the catalog link (in case the catalog was synced after this row).
-        update: { problemId },
-      });
-      imported += 1;
-    }
-
-    onProgress?.({ imported, accepted });
-
-    pages += 1;
-    if (!list.hasNext) break;
-    offset += PAGE_LIMIT;
-    await sleep(DELAY_MS);
+    const isNew = !knownIds.has(s.id);
+    await prisma.submission.upsert({
+      where: { lcSubmissionId: s.id },
+      create: {
+        lcSubmissionId: s.id,
+        problemId,
+        titleSlug: s.titleSlug,
+        lang: "",
+        statusDisplay: "Accepted",
+        isAccepted: true,
+        runtime: null,
+        memory: null,
+        code: "",
+        submittedAt: new Date(Number(s.timestamp) * 1000),
+      },
+      // Only worth refreshing the catalog link (if the catalog was synced later).
+      update: { problemId },
+    });
+    if (isNew) imported += 1;
   }
+
+  options.onProgress?.({ imported, accepted: list.length });
 
   return {
     imported,
-    accepted,
+    accepted: list.length,
     distinctSolved: solvedSlugs.size,
     unmatched: [...unmatchedSlugs],
   };
@@ -189,20 +142,17 @@ export async function runSubmissionSync(
 
 async function main(): Promise<void> {
   const auth = await resolveLeetCodeAuth();
-  console.log(`Fetching submissions for "${auth.username || "connected account"}"...`);
+  console.log(`Fetching recent solves for "${auth.username || "connected account"}"...`);
 
-  const result = await runSubmissionSync(auth, {
-    onProgress: ({ imported }) => console.log(`  ...${imported} submissions`),
-  });
+  const result = await runSubmissionSync(auth);
 
   console.log(`\nDone.`);
-  console.log(`  ${result.imported} submissions stored`);
-  console.log(`  ${result.accepted} accepted, across ${result.distinctSolved} distinct problems`);
+  console.log(`  ${result.imported} new (of ${result.accepted} recent accepted)`);
+  console.log(`  across ${result.distinctSolved} distinct problems`);
   if (result.unmatched.length > 0) {
     console.log(
-      `  ${result.unmatched.length} submissions were for slugs not in the catalog ` +
-        `(run sync:catalog if that seems high): ${result.unmatched.slice(0, 10).join(", ")}` +
-        (result.unmatched.length > 10 ? ", ..." : ""),
+      `  ${result.unmatched.length} not in the catalog ` +
+        `(run sync:catalog if that seems high): ${result.unmatched.slice(0, 10).join(", ")}`,
     );
   }
 }
