@@ -112,7 +112,7 @@ export function fetchProblemDescription(slug: string): Promise<ProblemDescriptio
 }
 
 export function fetchHistory(query: HistoryQuery): Promise<HistoryResponse> {
-  return getJson<HistoryResponse>(`/api/attempts${toQueryString({ ...query })}`)
+  return getJson<HistoryResponse>(`/api/history${toQueryString({ ...query })}`)
 }
 
 export function createAttempt(body: NewAttempt): Promise<Attempt> {

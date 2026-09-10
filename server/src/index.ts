@@ -24,6 +24,7 @@ import { predictionsRouter } from "./routes/predictions";
 import { recommendationsRouter } from "./routes/recommendations";
 import { dashboardRouter } from "./routes/dashboard";
 import { settingsRouter } from "./routes/settings";
+import { historyRouter } from "./routes/history";
 import { startAutoSync, stopAutoSync } from "./leetcode/autoSync";
 
 const app = express();
@@ -64,6 +65,7 @@ app.use("/api/predictions", predictionsRouter);
 app.use("/api/recommendations", recommendationsRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/history", historyRouter);
 
 // In a deployed build the server also serves the compiled client, so it's all
 // one origin (no CORS, no separate host). `../../client/dist` resolves the same

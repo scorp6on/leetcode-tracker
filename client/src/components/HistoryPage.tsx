@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { fetchHistory } from '../api'
-import type { HistoryAttempt, HistoryResponse, Outcome } from '../types'
+import type { HistoryEvent, HistoryResponse, Outcome } from '../types'
 import { FAILURE_MODE_LABEL, OUTCOME_LABEL, OUTCOMES } from '../labels'
 import { ProblemDetailModal, type DetailProblem } from './ProblemDetailModal'
 
 const PAGE_SIZE = 50
 
+type KindFilter = 'all' | 'attempt' | 'submission'
 type SourceFilter = '' | 'MANUAL' | 'IMPORTED'
 type OutcomeFilter = '' | Outcome
 
@@ -19,20 +20,22 @@ const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 export function HistoryPage() {
-  const [outcome, setOutcome] = useState<OutcomeFilter>('')
+  const [kind, setKind] = useState<KindFilter>('all')
   const [source, setSource] = useState<SourceFilter>('')
+  const [outcome, setOutcome] = useState<OutcomeFilter>('')
   const [page, setPage] = useState(1)
   const [data, setData] = useState<HistoryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [detailFor, setDetailFor] = useState<DetailProblem | null>(null)
 
-  useEffect(() => setPage(1), [outcome, source])
+  useEffect(() => setPage(1), [kind, source, outcome])
 
   useEffect(() => {
     let cancelled = false
     fetchHistory({
-      outcome: outcome || undefined,
+      kind: kind === 'all' ? undefined : kind,
       source: source || undefined,
+      outcome: outcome || undefined,
       page,
       pageSize: PAGE_SIZE,
     })
@@ -41,10 +44,11 @@ export function HistoryPage() {
     return () => {
       cancelled = true
     }
-  }, [outcome, source, page])
+  }, [kind, source, outcome, page])
 
-  const rows = data?.attempts ?? []
+  const events = data?.events ?? []
   const totalPages = data?.totalPages ?? 1
+  const filtered = kind !== 'all' || source !== '' || outcome !== ''
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -52,23 +56,24 @@ export function HistoryPage() {
       <p className="mt-1.5 text-sm text-muted">
         {data ? (
           <>
-            <span className="tabular-nums text-ink">{data.total.toLocaleString()}</span> attempt
+            <span className="tabular-nums text-ink">{data.total.toLocaleString()}</span> event
             {data.total === 1 ? '' : 's'}
-            {(outcome || source) && ' matching these filters'}
+            {filtered ? ' matching these filters' : ' · attempts you logged + solves from LeetCode'}
           </>
         ) : (
-          ' '
+          ' '
         )}
       </p>
 
       <div className="mt-5 flex flex-wrap gap-6">
-        <Segmented<OutcomeFilter>
-          label="Outcome"
-          value={outcome}
-          onChange={setOutcome}
+        <Segmented<KindFilter>
+          label="Type"
+          value={kind}
+          onChange={setKind}
           options={[
-            { value: '', label: 'All' },
-            ...OUTCOMES.map((o) => ({ value: o as OutcomeFilter, label: OUTCOME_LABEL[o] })),
+            { value: 'all', label: 'All' },
+            { value: 'attempt', label: 'Attempts' },
+            { value: 'submission', label: 'LeetCode solves' },
           ]}
         />
         <Segmented<SourceFilter>
@@ -81,19 +86,28 @@ export function HistoryPage() {
             { value: 'IMPORTED', label: 'Imported' },
           ]}
         />
+        <Segmented<OutcomeFilter>
+          label="Outcome"
+          value={outcome}
+          onChange={setOutcome}
+          options={[
+            { value: '', label: 'All' },
+            ...OUTCOMES.map((o) => ({ value: o as OutcomeFilter, label: OUTCOME_LABEL[o] })),
+          ]}
+        />
       </div>
 
       {error && <p className="mt-6 text-sm text-hard">Error: {error}</p>}
 
       <div className="mt-5 overflow-hidden rounded-xl border border-line bg-surface">
-        {data && rows.length === 0 && (
+        {data && events.length === 0 && (
           <p className="px-4 py-10 text-center text-sm text-muted">
-            No attempts match these filters.
+            Nothing matches these filters.
           </p>
         )}
         <ul>
-          {rows.map((a) => (
-            <HistoryRow key={a.id} attempt={a} onOpenProblem={setDetailFor} />
+          {events.map((e) => (
+            <HistoryRow key={e.id} event={e} onOpenProblem={setDetailFor} />
           ))}
         </ul>
       </div>
@@ -130,48 +144,73 @@ export function HistoryPage() {
 }
 
 function HistoryRow({
-  attempt: a,
+  event: e,
   onOpenProblem,
 }: {
-  attempt: HistoryAttempt
+  event: HistoryEvent
   onOpenProblem: (p: DetailProblem) => void
 }) {
+  const title = (
+    <button
+      type="button"
+      onClick={() => onOpenProblem(e.problem)}
+      className={
+        'text-left hover:text-white hover:underline ' +
+        (e.kind === 'submission' ? 'text-[14.5px] font-medium' : 'text-[14.5px] font-semibold')
+      }
+    >
+      <span className="text-dim">{e.problem.lcFrontendId}.</span> {e.problem.title}
+    </button>
+  )
+
+  if (e.kind === 'submission') {
+    return (
+      <li className="grid grid-cols-[3.5rem_1fr_auto] gap-4 border-b border-line px-4 py-3.5 last:border-0 hover:bg-surface-2">
+        <span className="flex items-start gap-1.5 pt-0.5 text-[13px] tabular-nums text-muted">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#ffa116]" title="LeetCode" />
+          {shortDate(e.at)}
+        </span>
+        <div className="min-w-0">
+          {title}
+          <div className="mt-0.5 text-[12.5px] text-dim">Solved on LeetCode</div>
+        </div>
+        <span className="h-fit rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-muted">
+          {e.statusDisplay}
+        </span>
+      </li>
+    )
+  }
+
   const meta: string[] = []
-  if (a.failureMode) meta.push(FAILURE_MODE_LABEL[a.failureMode])
-  if (a.minutes != null) meta.push(`${a.minutes} min`)
-  if (a.confidence != null) meta.push(`confidence ${a.confidence}/5`)
-  if (a.source === 'IMPORTED') meta.push('imported')
+  if (e.failureMode) meta.push(FAILURE_MODE_LABEL[e.failureMode])
+  if (e.minutes != null) meta.push(`${e.minutes} min`)
+  if (e.confidence != null) meta.push(`confidence ${e.confidence}/5`)
+  if (e.source === 'IMPORTED') meta.push('imported')
 
   return (
     <li className="grid grid-cols-[3.5rem_1fr_auto] gap-4 border-b border-line px-4 py-3.5 last:border-0 hover:bg-surface-2">
-      <span className="pt-0.5 text-[13px] tabular-nums text-muted">{shortDate(a.attemptedAt)}</span>
+      <span className="pt-0.5 text-[13px] tabular-nums text-muted">{shortDate(e.at)}</span>
       <div className="min-w-0">
-        <button
-          type="button"
-          onClick={() => onOpenProblem({ id: a.problemId, ...a.problem })}
-          className="text-left text-[14.5px] font-semibold hover:text-white hover:underline"
-        >
-          <span className="text-dim">{a.problem.lcFrontendId}.</span> {a.problem.title}
-        </button>
+        {title}
         {meta.length > 0 && (
           <div className="mt-1 text-[12.5px] text-muted">
             {meta.map((m, i) => (
               <span key={m}>
                 {i > 0 && <span className="mx-1.5 text-dim">·</span>}
                 {/* failure mode is always the first item when present */}
-                <span className={i === 0 && a.failureMode ? 'text-medium' : ''}>{m}</span>
+                <span className={i === 0 && e.failureMode ? 'text-medium' : ''}>{m}</span>
               </span>
             ))}
           </div>
         )}
-        {a.notes && (
-          <p className="mt-1.5 border-l-2 border-line pl-2.5 text-[13px] text-muted">{a.notes}</p>
+        {e.notes && (
+          <p className="mt-1.5 border-l-2 border-line pl-2.5 text-[13px] text-muted">{e.notes}</p>
         )}
       </div>
       <span
-        className={`h-fit rounded-full px-2.5 py-0.5 text-xs font-semibold ${OUTCOME_PILL[a.outcome]}`}
+        className={`h-fit rounded-full px-2.5 py-0.5 text-xs font-semibold ${OUTCOME_PILL[e.outcome]}`}
       >
-        {OUTCOME_LABEL[a.outcome]}
+        {OUTCOME_LABEL[e.outcome]}
       </span>
     </li>
   )

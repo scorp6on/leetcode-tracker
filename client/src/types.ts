@@ -192,27 +192,48 @@ export interface Attempt {
   notes: string | null
 }
 
-/** An attempt with its problem attached — the History screen's row shape. */
-export interface HistoryAttempt extends Attempt {
-  problem: {
-    lcFrontendId: number
-    title: string
-    slug: string
-    difficulty: Difficulty
-    url: string
-    topics: Topic[]
-  }
+interface HistoryProblem {
+  id: number
+  lcFrontendId: number
+  title: string
+  slug: string
+  difficulty: Difficulty
+  url: string
+  topics: Topic[]
 }
 
+/** One row in the History timeline — either a logged attempt or a LeetCode solve. */
+export type HistoryEvent =
+  | {
+      kind: 'attempt'
+      id: string
+      at: string
+      problem: HistoryProblem
+      outcome: Outcome
+      source: 'MANUAL' | 'IMPORTED'
+      minutes: number | null
+      confidence: number | null
+      failureMode: FailureMode | null
+      notes: string | null
+    }
+  | {
+      kind: 'submission'
+      id: string
+      at: string
+      problem: HistoryProblem
+      statusDisplay: string
+    }
+
 export interface HistoryQuery {
-  outcome?: Outcome
+  kind?: 'all' | 'attempt' | 'submission'
   source?: 'MANUAL' | 'IMPORTED'
+  outcome?: Outcome
   page?: number
   pageSize?: number
 }
 
 export interface HistoryResponse {
-  attempts: HistoryAttempt[]
+  events: HistoryEvent[]
   page: number
   pageSize: number
   total: number
