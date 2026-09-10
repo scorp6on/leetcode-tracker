@@ -3,8 +3,8 @@ import { fetchProblems, fetchTopics } from '../api'
 import type { Problem, ProblemsQuery, ProblemsResponse, TopicOption } from '../types'
 import { DifficultyBadge } from './DifficultyBadge'
 import { EMPTY_FILTERS, FilterPanel, type Filters } from './FilterPanel'
-import { LogAttemptModal } from './LogAttemptModal'
 import { PredictModal } from './PredictModal'
+import { ProblemDetailModal } from './ProblemDetailModal'
 
 const PAGE_SIZE = 50
 
@@ -22,7 +22,7 @@ export function ProblemsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [logTarget, setLogTarget] = useState<Problem | null>(null)
+  const [detailTarget, setDetailTarget] = useState<Problem | null>(null)
   const [predictTarget, setPredictTarget] = useState<Problem | null>(null)
 
   // Topics list — fetched once.
@@ -154,7 +154,7 @@ export function ProblemsPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setLogTarget(p)}
+                  onClick={() => setDetailTarget(p)}
                   className="flex-1 text-left text-sm"
                 >
                   <span className="text-dim">{p.lcFrontendId}.</span> {p.title}
@@ -217,14 +217,11 @@ export function ProblemsPage() {
         </div>
       )}
 
-      {logTarget && (
-        <LogAttemptModal
-          problem={logTarget}
-          onClose={() => setLogTarget(null)}
-          onSaved={() => {
-            setLogTarget(null)
-            reloadCurrentPage()
-          }}
+      {detailTarget && (
+        <ProblemDetailModal
+          problem={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onLogged={reloadCurrentPage}
         />
       )}
 
